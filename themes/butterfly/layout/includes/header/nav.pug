@@ -1,14 +1,24 @@
+//- 判「是不是首页」这一步有点绕：本站在 source/index.md 里写了 layout: hero，
+//- getPageType 见到 layout 就直接当页型返回，首页在这儿叫 'hero' 不叫 'home'；
+//- 而它又是「一个普通页面」而不是 Hexo 的索引页，is_home() 也一律返回假。
+//- 所以照 structured_data.pug 的老办法：认路径。首页的 path 就是 index.html。
+- var hbIsHome = is_home() || page.path === '' || page.path === 'index.html'
+- var hbFlipTitle = !hbIsHome && globalPageType !== 'home' && theme.nav.display_post_title
+- var hbNavTitle = page.title || page.tag || page.category || config.title
 nav#nav
-  span#blog-info
+  span#blog-info(class=hbFlipTitle ? 'hb-flip-title' : false)
     a.nav-site-title(href=url_for('/'))
       if theme.nav.logo
         img.site-icon(src=url_for(theme.nav.logo) alt='Logo')
       if theme.nav.display_title
         span.site-name=config.title
-    if globalPageType === 'post' && theme.nav.display_post_title
+    //- r130：原来只有文章页才有这枚「本页名字 ⇄ 返回首页」，现在往左让一步，
+    //- 日历页 / 聊天页 / 标签页这些也照一样画（首页除外 —— 首页左上角要焊死站名）。
+    //- 具体长什么样、怎么翻，都归 hero.css 里 .hb-flip-title 那一组管。
+    if hbFlipTitle
       a.nav-page-title(href=url_for('/'))
         span.hb-flip
-          span.site-name=(page.title || config.title)
+          span.site-name=hbNavTitle
           span.site-name
             i.fa-solid.fa-circle-arrow-left
             span= '  ' + _p('post.back_to_home')
