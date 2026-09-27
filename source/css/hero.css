@@ -1,0 +1,1520 @@
+/* ===== hero (3D landing) ===== */
+/* 「About Me」那行艺术字用的手写体。字体文件跟网页放在一起（/fonts），
+   不连任何外部字体站，国内访问也稳。只含拉丁字母，中文自动落回系统字体。 */
+@font-face { font-family: 'Caveat'; font-style: normal; font-weight: 700; font-display: swap;
+  src: url('/fonts/caveat-700.woff2') format('woff2'); }
+@font-face { font-family: 'Caveat'; font-style: normal; font-weight: 400; font-display: swap;
+  src: url('/fonts/caveat-400.woff2') format('woff2'); }
+#hero { width: 100%; }
+.hero-scroll { position: relative; height: 500vh; }
+/* ===== 3D 那一屏：钉死在视口上，不跟着页面滚 =====
+   greymac 实测：它那层暗幕是 position:fixed，滚动时位置一动不动，
+   只有 opacity 从 1 线性降到 0（滚满一屏正好归零）。
+   原来是 sticky —— sticky 有个绕不过去的毛病：白卡排在它后面，
+   一旦滚动超过 sticky 的作用范围，这屏就会自己往上滑走，
+   永远做不到「白卡从上面盖过去」。
+   改成 fixed 之后位置焊死，退场交给 hero.js 那个 opacity 收尾。
+   pointer-events 必须关掉：它现在永远盖在整屏上，
+   不关的话下面的白卡、页脚全都点不动。 */
+.hero-sticky { position: fixed; inset: 0; height: 100vh; overflow: hidden;
+  z-index: 2; pointer-events: none; will-change: opacity; }
+.hero-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+/* 浅海的暗角：四周轻轻压向水色，让中间的角色浮起来。
+   浅海第三版：比上一版又松了一档，而且从「深海军蓝」换成偏青的水色 ——
+   浅水区的边缘本来就只是稍深一点的蓝，不该压成一圈黑边。 */
+.hero-vignette { position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(128% 98% at 50% 42%, rgba(0,0,0,0) 54%, rgba(28,104,140,.15) 100%); }
+
+/* 镜头特效两层，各自独立、各自一个开关：
+    - .hero-fx-blur  「镜头虚化」：强度写在 --fx 上（0 = 完全关掉），
+      只跟「脸部特写那两幕」走，前后自动归零。
+      用一圈径向遮罩：正中（脸）留住，四周才化开，像镜头的景深而不是整幅糊掉。
+    - .hero-fx-shade 「从画面最右侧延伸进来的黑色滤镜」：强度写在 --shade 上，
+      第 2、3、4 幕开着、首尾两幕关掉。最右 20% 是 20% 的黑，到画面正中剩 5%，
+      再往左化到没有；它允许盖在角色身上。 */
+.hero-fx { position: absolute; inset: 0; pointer-events: none; }
+.hero-fx-blur { position: absolute; inset: -3px; opacity: calc(var(--fx, 0) * .78);
+  -webkit-backdrop-filter: blur(11px) saturate(.95); backdrop-filter: blur(11px) saturate(.95);
+  -webkit-mask-image: radial-gradient(58% 54% at 50% 44%, rgba(0,0,0,.30) 0%, rgba(0,0,0,.78) 52%, #000 100%);
+  mask-image: radial-gradient(58% 54% at 50% 44%, rgba(0,0,0,.30) 0%, rgba(0,0,0,.78) 52%, #000 100%); }
+.hero-fx-shade { position: absolute; inset: 0; opacity: var(--shade, 0);
+  /* 底从浅灰变成深蓝之后，原来那档黑几乎看不出效果了，所以整体加重了一档 */
+  background: linear-gradient(to left, rgba(0,0,0,.30) 0%, rgba(0,0,0,.30) 20%,
+    rgba(0,0,0,.09) 50%, rgba(0,0,0,0) 78%); }
+.hero-poster { position: absolute; inset: 0; background-size: cover; background-position: center 30%; display: none; }
+
+/* ===== 首屏加载遮罩 =====
+   3D 模型要在浏览器里解析一段时间（几百毫秒到一两秒，看网速和机器）。
+   现在这段时间并不是「空海」：hero.js 会先把海画出来（renderSkyOnly），
+   所以这一层只干三件事 ——
+     1) 盖住「画布第一帧还没出来」那零点几秒（.hero-loader-veil）
+     2) 转那圈水波 + 两行字，告诉人「正在加载」
+     3) 挡住底下的点击
+   角色真正画出来的那一帧，遮罩整层淡出；因为背景从头到尾都是同一片
+   在动的水，淡出时不会有任何接缝。
+   注意：动画只允许用 transform / opacity —— 模型解析时主线程会卡住一秒多，
+   只有交给合成器的那两种属性才能在那段时间里继续动。
+   「.hero-loader-art」是留给自定义动画素材的替换位，现在先用纯 CSS 的水波顶着。 */
+.hero-loader { position: fixed; inset: 0; z-index: 120;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: transparent;
+  transition: opacity .8s cubic-bezier(.22,.61,.36,1), visibility .8s; }
+/* 加载中还挡住底下的点击，免得点穿到看不见的导航 / 卡片上去 */
+.hero-loader.is-done { opacity: 0; visibility: hidden; pointer-events: none; }
+/* 盖住「画布第一帧还没出来」那一小段。以前这一层是常驻的，还按量出来的
+   色标去凑海的颜色 —— 问题是海里那条亮带一直在慢慢漂，静态渐变永远对不准，
+   遮罩淡出的时候就会看见一块对不上的蓝（实测中段能差到 90 多）。
+   现在 hero.js 让海从第一帧就真的画出来，这层只要撑到那一刻就退场，
+   之后露出来的就是同一片在动的水，接缝从根上没有了。 */
+.hero-loader-veil { position: absolute; inset: 0; z-index: 0; opacity: 1;
+  background: linear-gradient(180deg,
+    #326e85 1.8%, #417e94 8.9%, #4f8ea4 17.8%, #39748a 28.9%,
+    #266078 40%, #235d75 50%, #235c74 60%, #30677e 71.1%,
+    #457e94 82.2%, #457d93 92.2%, #3c728a 98.4%);
+  transition: opacity .55s cubic-bezier(.22,.61,.36,1); }
+.hero-loader.is-sky .hero-loader-veil { opacity: 0; }
+/* 素材位：原来就一圈纯 CSS 水波（132px），现在换成那圈真在动的发光水环
+   （真素材是 .hero-ring-video，住在 .hero-sticky 里，见下）。
+   这一格只剩「兜底」：四个 span 里那圈水波和中间的光核。
+   水环的视频一播起来（脚本给它和这一格一起挂 .is-live）就把兜底撤掉 ——
+   两个脉动叠在同一格上会打架。水波的 opacity 写在关键帧里，声明式的 opacity
+   压不住它，所以这里用 visibility。 */
+.hero-loader-art { position: relative; z-index: 1; width: 240px; height: 240px; margin-bottom: 26px; }
+.hero-loader-art.is-live .hero-loader-ring,
+.hero-loader-art.is-live .hero-loader-core { animation: none; visibility: hidden; }
+@media (max-width: 560px) {
+  .hero-loader-art { width: 176px; height: 176px; margin-bottom: 22px; }
+}
+
+/* ===== 加载遮罩里那圈发光水环（真素材）=====
+   它是 hero.pug 里 .hero-sticky 的最后一个孩子，跟画布同辈 —— 为什么非要
+   放在那一层，见 hero.pug 里那行 video 上面的注释（一句话：屏幕混合只认
+   同一个隔离组里排在它下面的东西，搁在加载遮罩里就混不到海，黑的会露成方砖）。
+   这里只负责把它摆在跟 .hero-loader-art 那一格完全重合的位置上：
+   遮罩是「竖向居中 + 那圈水波 + 两行字」的一列，素材格因此不是画面正中，
+   而是正中再往上抬 53px（240 高的一半是 120，加起来 173）—— 这两个数就是
+   从实际布局里量出来的，改遮罩那一列的间距/字号时要跟着复核。 */
+.hero-ring-video { position: absolute; left: 50%; top: 50%;
+  width: 240px; height: 240px; margin: -173px 0 0 -120px;
+  object-fit: contain; mix-blend-mode: screen; pointer-events: none;
+  opacity: 0; visibility: hidden;
+  transition: opacity .6s cubic-bezier(.22,.61,.36,1), visibility .6s; }
+/* 视频报到（inline 脚本挂上 .is-live）才露脸；报到之前一直是透明的，
+   露出来的是上面那圈兜底水波。 */
+.hero-ring-video.is-live { opacity: 1; visibility: visible; }
+/* 角色浮出水面（hero.js 的 hideLoader）就淡出收工，别继续在角色脸上加光。 */
+.hero-ring-video.is-off { opacity: 0; visibility: hidden; }
+@media (max-width: 560px) {
+  /* 窄屏素材格缩到 176（上一条媒体查询），底下的两行字没变，
+     所以整列矮了 68，重心往下挪 2 —— 素材格顶边改成往上抬 139。 */
+  .hero-ring-video { width: 176px; height: 176px; margin: -139px 0 0 -88px; }
+}
+.hero-loader-core { position: absolute; left: 50%; top: 50%; width: 26px; height: 26px;
+  margin: -13px 0 0 -13px; border-radius: 50%;
+  background: radial-gradient(circle at 38% 34%, #ffffff 0%, #cdf2ff 46%, #7fd4f0 100%);
+  box-shadow: 0 0 26px rgba(214,252,255,.85), 0 0 60px rgba(150,228,252,.55);
+  animation: heroLoaderCore 2.6s ease-in-out infinite; }
+.hero-loader-ring { position: absolute; inset: 0; border-radius: 50%;
+  border: 1.5px solid rgba(255,255,255,.9);
+  animation: heroLoaderRipple 2.6s cubic-bezier(.22,.61,.36,1) infinite; }
+.hero-loader-ring:nth-child(2) { animation-delay: .87s; }
+.hero-loader-ring:nth-child(3) { animation-delay: 1.74s; }
+@keyframes heroLoaderRipple {
+  0%   { transform: scale(.18); opacity: 0; }
+  12%  { opacity: .85; }
+  70%  { opacity: .26; }
+  100% { transform: scale(1); opacity: 0; }
+}
+@keyframes heroLoaderCore {
+  0%, 100% { transform: scale(1); opacity: .92; }
+  50%      { transform: scale(1.16); opacity: 1; }
+}
+.hero-loader-title { position: relative; z-index: 1; margin: 0; font-size: 22px; font-weight: 600; letter-spacing: .3em;
+  text-indent: .3em; color: #fff; text-shadow: 0 2px 14px rgba(16,84,120,.45); }
+.hero-loader-sub { position: relative; z-index: 1; margin: 10px 0 0; font-size: 13px; letter-spacing: .12em;
+  color: rgba(255,255,255,.9); text-shadow: 0 2px 12px rgba(16,84,120,.4); }
+
+.hero-panels { position: absolute; inset: 0; pointer-events: none; }
+.hero-panel { position: absolute; opacity: 0; will-change: transform, opacity; }
+/* 白卡的三档透明度（--hb-card-a 是主填充，--hb-card-edge 是那圈白边）。
+   一开始填充给到 .74，在白底页面上是够清爽的，但压在深蓝海面上就像贴了张
+   不透明的纸，看着很「刻意」。现在降到 .56，靠加厚模糊（10 → 14px）把字
+   的可读性补回来 —— 字清楚靠的是后面那层被糊掉的背景，不是靠白得发亮。 */
+.hero-panel-inner { --hb-card-a: .56; --hb-card-edge: .46;
+  background: rgba(255,255,255,var(--hb-card-a));
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+  border: 1px solid rgba(255,255,255,var(--hb-card-edge)); border-radius: 16px; padding: 18px 20px 20px;
+  box-shadow: 0 12px 34px rgba(38,50,40,.14); max-width: 330px; }
+.hero-kicker { display: inline-block; margin-bottom: 10px; padding: 3px 11px 4px;
+  font-size: 11px; letter-spacing: .12em; color: #14171a;
+  background: rgba(255,255,255,.94); border: 1.5px solid #14171a; border-radius: 999px; }
+.hero-panel-inner h3 { margin: 0 0 8px; font-size: 20px; line-height: 1.3; color: #2c3129; }
+.hero-panel-inner p { margin: 0; font-size: 14px; line-height: 1.65; color: #5d6557; }
+.hero-tags { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
+.hero-tags span { font-size: 12px; padding: 3px 11px 4px; border-radius: 999px;
+  background: rgba(255,255,255,.94); border: 1.5px solid #14171a; color: #14171a; }
+
+/* ===== 第 0 幕：「About Me」艺术字 =====
+   顶上那行（.hero-about-top）钉在页面最顶上 —— 也就是她头顶那块空白里，
+   写的是「组成我的 ——」加一个按顺序循环的打字机词；
+   中间那组从上往下是「沃雅妮莎激推！！/ About Me / WELCOME」。
+   居中一律用 left/right:0 撑满整行 + text-align 居中，不能用 transform：
+   那一行会被 hero.js 每帧写进去的 translateY 覆盖掉。
+   顶上那行的位置是反推出来的：--about-top 是这组字在视口里的高度（51vh），
+   calc(0vh - var(--about-top)) 就是「视口最上沿」相对这组字的偏移
+   （2026-09-26 r77：原来是 10vh，用户要求这行直接顶到浏览器最上面）。
+   以后要挪 About Me 那一组，只改 --about-top 一处，顶上这行不会跟着跑偏。
+   （--about-top 等于「沃雅妮莎激推！！」那一行的高度加上原来那 55vh 的余量，
+   所以中间这组往上提了一格，About Me 的位置看着没动。）
+   打字机后面那格宽度是写死的（min-width）：要是让它跟着字数变宽，每打一个
+   字整行都会重新居中、左右来回抖。现在最长的词是「螺蛳粉」「二次元」三个字。 */
+.hero-panels > .hero-panel--about { --about-top: 51vh; left: 0; right: 0; top: var(--about-top); }
+.hero-about, .hero-about-top { text-align: center; color: #0e1b24;
+  text-shadow: 0 1px 0 rgba(255,255,255,.55), 0 8px 30px rgba(255,255,255,.45); }
+.hero-about-top { position: absolute; left: 0; right: 0;
+  top: calc(0vh - var(--about-top)); }
+.hero-about-name { margin: 0 0 .18em; font-size: clamp(17px, 1.95vw, 26px); font-weight: 700;
+  letter-spacing: .12em; opacity: .94; }
+.hero-about-kicker { margin: 0; font-family: 'Caveat', 'Segoe Script', 'Brush Script MT', cursive;
+  font-weight: 700; font-size: clamp(58px, 9.4vw, 138px); line-height: .9; letter-spacing: .01em; }
+.hero-about-line { margin: 0; display: flex; align-items: baseline; justify-content: center;
+  font-size: clamp(16px, 1.7vw, 23px); letter-spacing: .04em; font-weight: 700; }
+.hero-about-lead { white-space: nowrap; }
+.hero-about-word { min-width: 3.8em; text-align: left; padding-left: .28em; }
+/* 打字机那根光标（2026-09-26 r80 修）：
+   原来是把光标画成整格右侧的边线（border-right），可这一格是按最长词
+   定死的 3.8em，字只占格子左边 —— 于是光标飘在最后一个字外面老远，
+   而且高度是整行行高（46px），比字面（约 31px）高出一大截，看着很突兀。
+   现在改成跟在最后一个字后面的小竖条：用 ::after 跟着文字流走，
+   宽度 .09em、高度 .9em（约等于字面高），底边压到基线下面一点点，
+   跟汉字站齐；闪烁还是原来那个节奏。 */
+.hero-about-word::after {
+  content: ''; display: inline-block; width: .09em; height: .9em;
+  margin-left: .1em; background: currentColor; vertical-align: -.1em;
+  animation: hb-caret 1.05s linear infinite;
+}
+@keyframes hb-caret {
+  0%, 50% { opacity: 1; }
+  50.01%, 100% { opacity: 0; }
+}
+.hero-about-welcome { margin: 24px 0 0; font-family: 'Caveat', 'Segoe Script', cursive;
+  font-weight: 400; font-size: clamp(19px, 2.3vw, 32px); letter-spacing: .46em; opacity: .84; }
+
+/* 卡片的位置是跟着「那一幕的取景」挑的（人往哪边偏，卡就补另一边），
+   所以下面这几个数字是「幕」的序号，要跟 hero.js 的 KEYS 一一对上。 */
+.hero-panel[data-index="1"] { left: 7vw; top: 24vh; }
+.hero-panel[data-index="2"] { right: 7vw; top: 20vh; }
+.hero-panel[data-index="3"] { left: 8vw; bottom: 18vh; }
+.hero-panel[data-index="4"] { right: 8vw; bottom: 16vh; }
+.hero-panel[data-index="5"] { left: 8vw; bottom: 16vh; }
+
+.hero-hint { position: absolute; left: 50%; bottom: 30px; transform: translateX(-50%); z-index: 8;
+  font-size: 12px; letter-spacing: .18em; color: #eaf9ff; opacity: .88;
+  text-shadow: 0 1px 6px rgba(9,48,72,.55); }
+.hero-credit { position: absolute; right: 28px; bottom: 20px; z-index: 8; font-size: 11px; color: #e2f5ff; opacity: .72;
+  text-shadow: 0 1px 6px rgba(9,48,72,.55); }
+
+/* ===== 窗口圆角：整站常驻的一圈边框 =====
+   形状没变，还是「外扩 30px + 边框厚 45px」→ 圆角落在画面外、内侧圆角 50px。
+   变的是颜色：原来是纯黑，现在边框整个透明，等于不画东西 ——
+   这样一来圆角外那一圈透出来的就是底下的深海（3D 天幕或 .hero-flow），
+   和沃雅妮莎页的背景是同一片，不是「调了一个相近的蓝」，是真的无缝。
+   想让边框重新显形，把 transparent 换成颜色即可，形状位置都不用动。 */
+.hero-frame { position: fixed; inset: -30px; z-index: 90; pointer-events: none;
+  border: 45px solid transparent; border-radius: 95px; }
+
+/* ===== 浅海流光：整站的底色 =====
+    放在 z-index:-1，永远在所有内容下面（要透出它，body / #body-wrap / #page /
+    #footer 都必须透明，下面那一组规则就是干这个的）。
+    两层：底下是缓慢漂移的大块水体（几个径向光斑 + 一条上浅下深的蓝），
+    ::after 是横着扫过去的细光带。都用 transform 动画，走 GPU，不重绘。
+    这里比 hero.js 里那五幕的色号整体再亮一档 —— 是有意的：
+    滚到最后沃雅妮莎那一屏淡出时，露出来的就是这一层，
+    「水里那层蓝化进更亮的浅海」这一眼才看得出淡出；
+    两边调成同一个蓝，淡出就变成「什么都没发生」（之前那版就是这个毛病）。
+
+    这一档落差就是「淡出看得见」的全部来源：这一层起手 #84d3e9（132,211,233），
+    hero.js 第 4 幕起手 0x4fb4da（79,180,218）。要再调色，这两个数得一起动，
+    并且保持「flow 比 hero 亮」。 */
+.hero-flow { position: fixed; inset: -12vmax; z-index: -1; pointer-events: none;
+  background:
+    radial-gradient(44% 36% at 20% 24%, rgba(214,252,255,.46) 0%, rgba(214,252,255,0) 70%),
+    radial-gradient(40% 32% at 80% 70%, rgba(170,236,252,.38) 0%, rgba(170,236,252,0) 72%),
+    radial-gradient(66% 50% at 50% 112%, rgba(44,126,172,.26) 0%, rgba(44,126,172,0) 72%),
+    linear-gradient(180deg, #84d3e9 0%, #6ec4e0 40%, #4faecf 72%, #3d9ac2 100%);
+  animation: heroFlowDrift 38s ease-in-out infinite alternate; will-change: transform; }
+.hero-flow::after { content: ''; position: absolute; inset: 0;
+  background:
+    linear-gradient(104deg, rgba(226,252,255,0) 36%, rgba(226,252,255,.24) 46%,
+      rgba(246,254,255,.34) 50%, rgba(226,252,255,.24) 54%, rgba(226,252,255,0) 64%),
+    linear-gradient(96deg, rgba(190,242,255,0) 60%, rgba(190,242,255,.18) 70%, rgba(190,242,255,0) 80%);
+  animation: heroFlowStreak 21s ease-in-out infinite alternate; }
+@keyframes heroFlowDrift {
+  0%   { transform: translate3d(-2.4%, -1.6%, 0) scale(1.06); }
+  50%  { transform: translate3d(1.8%, 1.9%, 0) scale(1.12); }
+  100% { transform: translate3d(2.6%, -1.1%, 0) scale(1.07); }
+}
+@keyframes heroFlowStreak {
+  0%   { transform: translate3d(-8%, 3%, 0); opacity: .5; }
+  100% { transform: translate3d(8%, -4%, 0); opacity: 1; }
+}
+
+/* ===== section after the hero =====
+   转场的关键结构，数字照抄 greymac 实测：
+   greymac 的白卡绝对顶边在 1125px，而淡出只走 0 → 900px（一屏高）。
+   也就是说淡出开始时白卡还在视口下沿之外 225px，淡出结束时停在离顶部 225px ——
+   顶上永远留着一截背景（greymac 是纯黑，我们这边是流光海洋蓝）。
+   正是那一截「露出来的底」让淡出看得见；白卡要是直接顶到最上沿，
+   整个过程就是「白色一把糊上去」，谈不上淡出。
+   225 / 900 = 视口高的四分之一，所以这里写 25vh，换屏也保持同一个比例。
+   左右和底部仍然各留 15px，那是圆角要的边距。 */
+.hero-after { background: transparent; padding: 25vh 15px 15px; position: relative; z-index: 20; }
+/* 白卡：色号 1:1 照抄 greymac —— #f2f4f8（冷白，带一丝蓝）。
+   原来是偏暖的米白 #fbfaf6，压在浅海上会显黄，而且跟 greymac 对不上。
+   greymac 实测：圆角 50px、无投影、左右各留 15px、卡片里第一屏也是「字由浅入深」，
+   这几项现在都对齐了。 */
+.hero-tab-card { position: relative; border-radius: 50px; background: #f2f4f8;
+  padding: 46px 0 56px; }
+
+/* ===== 白卡里的三列博客页 =====
+   左列：个人资料 + 站点统计（窄模块）
+   中列：文章大卡，右侧挂一块渐变封面（正文在左、封面在右）
+   右列：天气 / 今日一言 / 歌单（窄模块）
+   窄模块用纯白 + 圆角，靠底板的 #f2f4f8 拉开层次，不用投影 —— 和参考站一致。 */
+/* 三列的整体宽度：以前卡在 max-width 1400 上，宽屏左右会空出很大一片白，
+   看着像「三列挤在中间」。现在放宽到 1800、左右内边距收到 24px，
+   两侧的小模块就贴到白卡边上了（允许压到 50px 圆角那圈弧线里）。
+   中间那列跟着变宽，文章卡不再那么窄。 */
+.hero-blog { display: grid; grid-template-columns: 300px minmax(0, 1fr) 300px; gap: 22px;
+  max-width: 1800px; margin: 0 auto; padding: 0 24px; }
+.hero-blog-col { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+/* 中列的高度下限 —— 也就是「博客区延长」的那个旋钮。
+   中列决定白卡多高：文章卡 + 底下那张「文章归档」索引。
+   min-height 给的是一个「地板」：文章多了、比这个高，就听文章的；
+   文章少的时候不至于整块白卡矮得像张便签。
+   现在两篇文章 + 归档卡大概 1000px 出头，所以地板给到 1180 才看得见效果。
+   想再高/再矮就改这一个数字（视口高度会自动跟着，换屏不会跑偏）。 */
+.hero-blog-col--main { min-height: min(1180px, 134vh); }
+/* 侧栏卡片一律从上往下排。
+   之前用 space-between，是两列卡片数量不一样时会被拉开——
+   现在左列只剩一张资料卡、右列一张一言一张歌单，更不能拉。 */
+.hero-blog-col--side { justify-content: flex-start; }
+
+/* 侧栏小模块（资料卡 / 友情链接 / 本月日程 / 天气 / 一言 / 歌单）。
+   它们大多点不动，但鼠标停上去也得有反应 —— 手感照抄 xuioo 那套：
+   轻轻抬起 2px、影子化开、边框隐掉换成 1px 内描边（内描边不占地方、
+   不会把里面的字挤动），底色再亮一档。曲线用他家的 cubic-bezier(.32,.72,0,1)。 */
+.hb-card { background: #fff; border: 1px solid rgba(35, 42, 51, .06); border-radius: 20px;
+  padding: 20px 20px 22px;
+  outline: 1px solid transparent; outline-offset: -1px;
+  transition: transform .3s cubic-bezier(.32,.72,0,1),
+    box-shadow .3s cubic-bezier(.32,.72,0,1),
+    border-color .3s cubic-bezier(.32,.72,0,1),
+    outline-color .3s cubic-bezier(.32,.72,0,1),
+    background-color .3s cubic-bezier(.32,.72,0,1); }
+@media (hover: hover) and (pointer: fine) {
+  .hb-card:hover { transform: translateY(-2px);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, .06);
+    border-color: transparent;
+    outline-color: rgba(35, 42, 51, .55);
+    background-color: #f8fbfe; }
+}
+/* 侧栏里真能按的三张（本月日程 / 今日一言 / 你在的地方）：手感一样，
+   只把描边换成蓝色，一眼区分「这张能按」和「这张只是摆着」。
+   键盘 Tab 停上去也给一圈看得见的蓝框（内描边本身是透明的，得单独补）。 */
+.hb-card.hb-mini-cal-card:focus-visible,
+.hb-card.hb-chat-card:focus-visible { outline: 2px solid #2b7fb8; outline-offset: 3px; }
+@media (hover: hover) and (pointer: fine) {
+  .hb-card.hb-mini-cal-card:hover,
+  .hb-card.hb-chat-card:hover,
+  .hb-card.hb-quote-card:hover,
+  .hb-card.hb-weather-card:hover { outline-color: rgba(43, 127, 184, .55); }
+}
+.hb-card-title { font-size: 15px; font-weight: 600; color: #232a33; margin: 0 0 14px;
+  display: flex; align-items: center; gap: 8px; }
+.hb-card-title::before { content: ''; width: 3px; height: 14px; border-radius: 2px;
+  background: linear-gradient(180deg, #62c6e6, #2b7fb8); }
+/* 标题右侧的小徽标（现在只有「本月日程」那枚「测试中」在用）。
+   特意用琥珀色 + 虚线边：这排卡片里蓝色是「正常、可点」的意思，
+   换一套色一眼就能看出「这个还没定稿」。呼吸只用 opacity，
+   不用 transform —— 卡片本身 hover 时会往上抬，两个 transform 会打架。 */
+.hb-card-title .hb-beta { padding: 2px 7px 3px; font-size: 10px; font-weight: 600;
+  letter-spacing: .08em; line-height: 1.2; color: #8a5a00;
+  background: rgba(255, 196, 66, .22); border: 1px dashed rgba(191, 138, 21, .6);
+  border-radius: 999px; animation: hbBetaPulse 2.4s ease-in-out infinite; }
+@keyframes hbBetaPulse { 0%, 100% { opacity: .72; } 50% { opacity: 1; } }
+html.hb-dark .hb-card-title .hb-beta { color: #ffd88a; background: rgba(255, 196, 66, .15);
+  border-color: rgba(255, 205, 96, .52); }
+.hb-muted { font-size: 13px; color: #98a2b0; margin: 0; }
+.hb-center { text-align: center; padding: 30px 20px; }
+.hb-center .hb-card-title { justify-content: center; }
+.hb-center .hb-card-title::before { display: none; }
+
+/* ---- 左列：资料卡 ---- */
+.hb-profile { text-align: center; }
+.hb-avatar { width: 84px; height: 84px; margin: 4px auto 14px; border-radius: 50%;
+  overflow: hidden; background: linear-gradient(135deg, #cfe6f2, #9dc9dd); }
+.hb-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.hb-name { font-size: 17px; font-weight: 600; color: #232a33; }
+.hb-tagline { font-size: 12px; color: #98a2b0; margin-top: 6px; line-height: 1.6; }
+.hb-stats { display: flex; margin-top: 18px; padding-top: 16px;
+  border-top: 1px solid rgba(35, 42, 51, .07); }
+.hb-stat { flex: 1; }
+.hb-stat b { display: block; font-size: 19px; font-weight: 600; color: #232a33; line-height: 1.2; }
+.hb-stat span { font-size: 11px; color: #98a2b0; }
+.hb-rows { list-style: none; margin: 0; padding: 0; }
+.hb-rows li { display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
+  font-size: 13px; padding: 7px 0; }
+.hb-rows li span { color: #8a94a3; }
+.hb-rows li b { font-weight: 600; color: #232a33; }
+
+/* ---- 中列：文章列表 ---- */
+.hb-list-title { font-size: 22px; font-weight: 600; color: #232a33; margin: 2px 0 16px;
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.hb-list-count { font-size: 12px; font-weight: 400; color: #98a2b0; }
+/* 「最新文章」那一列：每张卡是横着的长条，高度只由内容撑开。
+   以前是 flex:1 + 中列 min-height:106vh，两张卡被拉成 433px 的方块，
+   整块白卡又高又空。现在高度交给内容（≈ 210px，正好是原来的一半）。 */
+.hb-posts { flex: 0 0 auto; display: flex; flex-direction: column; gap: 18px; }
+.hb-post { position: relative; display: flex; background: #fff;
+  border: 1px solid rgba(35, 42, 51, .06); border-radius: 20px; overflow: hidden;
+  flex: 0 0 auto; min-height: 206px;
+  --hb-art-fade: 255, 255, 255;
+  /* 悬停时那圈收紧的内描边 + 右下角那枚圆钮，白天用墨色、夜里翻成浅色 */
+  --hb-post-ink: #232a33; --hb-post-ink-bg: #fff;
+  outline: 1px solid transparent; outline-offset: -1px;
+  transition: transform .3s cubic-bezier(.32,.72,0,1),
+    box-shadow .3s cubic-bezier(.32,.72,0,1),
+    border-color .3s cubic-bezier(.32,.72,0,1),
+    outline-color .3s cubic-bezier(.32,.72,0,1); }
+.hb-post-body { flex: 1 1 auto; min-width: 0; padding: 30px 28px 28px;
+  display: flex; flex-direction: column; justify-content: center; gap: 12px; }
+.hb-post-title { font-size: 21px; font-weight: 600; line-height: 1.35; margin: 0; }
+/* 标题底下那条下划线：平时缩在左边看不见，鼠标停到卡上再从左边一路长出来。
+   链接改成 inline-block，是为了让下划线只跟字一样长，而不是铺满整列。 */
+.hb-post-title a { text-decoration: none; color: inherit; display: inline-block;
+  position: relative;
+  transition: color .3s cubic-bezier(.32,.72,0,1); }
+.hb-post-title a::after { content: ''; position: absolute; left: 0; bottom: -2px;
+  width: 100%; height: 2px; border-radius: 2px; background: currentColor;
+  transform: scaleX(0); transform-origin: 0 50%;
+  transition: transform .35s cubic-bezier(.32,.72,0,1); }
+.hb-post-meta { display: flex; flex-wrap: wrap; gap: 16px; font-size: 12px; color: #98a2b0; }
+.hb-meta-item { display: inline-flex; align-items: center; gap: 6px; }
+.hb-post-excerpt { font-size: 14px; line-height: 1.75; color: #5a6473; margin: 0; }
+.hb-post-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; padding-top: 4px; }
+.hb-tag { font-size: 11px; padding: 3px 10px; border-radius: 999px;
+  color: #2b7fb8; background: rgba(43, 127, 184, .10); }
+
+/* 整张卡都能点：铺一层透明链接盖住卡面（键盘 Tab 也停在这一层）。
+   标题那个链接只留给搜索引擎，从 Tab 顺序里摘掉了。 */
+.hb-post-hit { position: absolute; inset: 0; z-index: 3; border-radius: 20px;
+  text-decoration: none; }
+.hb-post-hit:focus-visible { outline: 2px solid #2b7fb8; outline-offset: -4px; }
+
+/* 悬停：整卡轻轻抬起 + 影子化开 + 边框隐掉换成内描边 + 标题下划线长出来 +
+   右下角滑出一枚圆钮 + 封面缓慢推近。参数整段照 xuioo 那套搬（-2px / 浅影 /
+   内描边 / cubic-bezier(.32,.72,0,1)），比原来那版「大蓝影子 + 蓝边框」干净。 */
+@media (hover: hover) and (pointer: fine) {
+  .hb-post:hover { transform: translateY(-2px);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, .06);
+    border-color: transparent;
+    outline-color: var(--hb-post-ink); }
+  .hb-post:hover .hb-post-title a { color: #2b7fb8; }
+  .hb-post:hover .hb-post-title a::after { transform: scaleX(1); }
+  .hb-post:hover .hb-post-art-img { transform: scale(1.05); }
+  .hb-post:hover .hb-post-arrow { opacity: 1; transform: translate(0, 0); }
+}
+
+/* 右下角那枚圆钮：平时藏在卡角外一点点，悬停时滑回原处并淡入。
+   pointer-events 关掉 —— 它盖在「整卡可点」那层链接上面，不关会挡住点击。 */
+.hb-post-arrow { position: absolute; right: 14px; bottom: 14px; z-index: 4;
+  width: 40px; height: 40px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--hb-post-ink); color: var(--hb-post-ink-bg); font-size: 14px;
+  pointer-events: none; opacity: 0; transform: translate(8px, 8px);
+  transition: opacity .3s cubic-bezier(.32,.72,0,1),
+    transform .3s cubic-bezier(.32,.72,0,1); }
+
+/* 渐变封面：没在文章里放图时自动顶上来，放了图就让位给真图。
+   五套冷色渐变轮着用（蓝 / 青 / 靛），贴角色的人鱼配色。
+   .hb-post-art 只是个裁切框，真正的画面在内层 .hb-post-art-img 上 ——
+   分开之后悬停才有得推（推内层，框不动，边缘不会被推出格）。 */
+.hb-post-art { flex: 0 0 42%; order: 2; position: relative; overflow: hidden; }
+.hb-post-art-img { position: absolute; inset: 0; background-size: cover;
+  background-position: center; transform: scale(1.001);
+  transition: transform .6s cubic-bezier(.32,.72,0,1); }
+/* 左上角那点高光，让渐变不至于太平 */
+.hb-post-art::before { content: ''; position: absolute; inset: 0; z-index: 2;
+  background: radial-gradient(120% 90% at 80% 15%, rgba(255, 255, 255, .30), transparent 60%); }
+/* 从右往左化开：封面左缘就是白卡的颜色，往右一路渐没，
+   照片像是从卡面里长出来的，不会在中间切一条竖线。
+   --hb-art-fade 是「卡片底色」，黑天由下面的深色规则覆盖。 */
+.hb-post-art::after { content: ''; position: absolute; inset: 0; z-index: 3;
+  pointer-events: none;
+  background: linear-gradient(to right,
+    rgb(var(--hb-art-fade)) 0%,
+    rgba(var(--hb-art-fade), .86) 9%,
+    rgba(var(--hb-art-fade), .46) 20%,
+    rgba(var(--hb-art-fade), .14) 31%,
+    rgba(var(--hb-art-fade), 0) 44%); }
+.hb-art-0 { background-image: linear-gradient(135deg, #3f8fc4, #8ad9ea 46%, #2b6f9e); }
+.hb-art-1 { background-image: linear-gradient(135deg, #4a6fc4, #9ad4e8 50%, #2a4f9e); }
+.hb-art-2 { background-image: linear-gradient(135deg, #2f8fae, #6fd8cf 48%, #1f6b8a); }
+.hb-art-3 { background-image: linear-gradient(135deg, #5a5fc0, #a9cbf2 50%, #3a3f8e); }
+.hb-art-4 { background-image: linear-gradient(135deg, #1f6f9e, #5cc0da 45%, #173f6b); }
+
+/* ---- 右列：天气 ---- */
+.hb-weather-top { display: flex; align-items: center; justify-content: center; gap: 10px; }
+.hb-weather-top i { font-size: 30px; color: #f0a93b; }
+.hb-weather-top b { font-size: 34px; font-weight: 300; color: #232a33; line-height: 1; }
+.hb-weather-city { text-align: center; font-size: 13px; color: #5a6473; margin-top: 8px; }
+.hb-weather-desc { text-align: center; font-size: 12px; color: #98a2b0; margin-top: 2px; }
+.hb-weather-foot { text-align: center; font-size: 11px; color: #98a2b0; margin-top: 14px;
+  padding-top: 12px; border-top: 1px solid rgba(35, 42, 51, .07); }
+
+/* ---- 右列：今日一言 / 歌单 ---- */
+.hb-quote { font-size: 13px; line-height: 1.85; color: #5a6473; margin: 0; }
+.hb-quote-from { font-size: 12px; color: #98a2b0; text-align: right; margin: 8px 0 0; }
+.hb-music { list-style: none; margin: 0; padding: 0; }
+.hb-music li { display: flex; align-items: center; gap: 10px; padding: 8px 0; }
+.hb-music-cover { flex: 0 0 38px; width: 38px; height: 38px; border-radius: 8px;
+  background-size: cover; background-position: center; }
+.hb-music-info { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.hb-music-info b { font-size: 13px; font-weight: 500; color: #232a33;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hb-music-info span { font-size: 11px; color: #98a2b0; }
+.hb-music-play { flex: 0 0 auto; width: 24px; height: 24px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(43, 127, 184, .10); color: #2b7fb8; font-size: 9px; }
+
+/* ---- 右列：今日一言（可点）---- */
+/* 悬停手感交给通用的 .hb-card:hover（抬起 + 影子 + 内描边），
+   这里只管「鼠标是只小手」和按下去往下沉 1px 的那点反馈。
+   自己那套 transition 要撤掉，否则会把通用的过渡覆盖掉，抬起会变成硬跳。 */
+.hb-quote-card { cursor: pointer; }
+.hb-quote-card:active { transform: translateY(1px); }
+.hb-quote-card.is-asking { opacity: .62; }
+/* 换句时就地淡入，不跳行；卡片给个最小高度，长短句之间不会抖。 */
+.hb-quote { min-height: 48px; }
+.hb-quote.is-swap { animation: hb-quote-in .38s cubic-bezier(.22,.61,.36,1); }
+@keyframes hb-quote-in {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: none; }
+}
+.hb-card-hint { font-size: 11px; color: #aeb6c2; margin: 12px 0 0;
+  padding-top: 10px; border-top: 1px solid rgba(35, 42, 51, .07); }
+
+/* ---- 右列：音乐歌单（点歌名切歌）----
+   网易云那个官方播放器是固定约 290px 宽的，卡片内边距只有 260px 装不下，
+   所以这一块用负外边距顶到卡片左右边缘，凑够宽度；上下仍留在卡片里。 */
+.hb-music-item { cursor: pointer; border-radius: 12px;
+  transition: background-color .2s ease; }
+.hb-music-item:hover { background: rgba(43, 127, 184, .06); }
+.hb-music-item.is-active { background: rgba(43, 127, 184, .10); }
+.hb-music-item.is-active .hb-music-info b { color: #2b7fb8; }
+.hb-music-item.is-active .hb-music-play { background: #2b7fb8; color: #fff; }
+/* ---- 右列：随机音乐（自己画的播放条）----
+   上一版这里挂的是网易云官方外链播放器，它会自己长出一个白色方框，在卡里很扎眼。
+   这版把真正出声的播放器藏进卡里（看不见），画面上只剩下一条 4px 的细进度条
+   加两个小圆钮：右边大的那个是播放 / 暂停，旁边带骰子的是换一首。 */
+.hb-music-btns { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; margin-left: auto; }
+.hb-music-toggle { border: 0; padding: 0; cursor: pointer; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  transition: background .2s ease, color .2s ease, transform .2s ease, box-shadow .2s ease; }
+.hb-music-toggle { width: 34px; height: 34px; font-size: 12px;
+  background: #2b7fb8; color: #fff; box-shadow: 0 4px 12px rgba(43, 127, 184, .30); }
+.hb-music-toggle:hover { transform: translateY(-1px); }
+.hb-music-toggle:active { transform: translateY(0) scale(.96); }
+/* 播放三角的重心偏左，往右挪一点看着才落在圆心中间 */
+.hb-music-toggle i.fa-play { margin-left: 2px; }
+/* 进度条：底色一条浅蓝，走过的那段是实心蓝；悬停 / 拖动时才冒出手柄圆点 */
+.hb-music-bar { margin: 12px 0 0; padding: 6px 0 0; cursor: pointer; outline: none;
+  -webkit-tap-highlight-color: transparent; }
+.hb-music-bar:focus-visible { outline: 2px solid rgba(43, 127, 184, .45); outline-offset: 3px;
+  border-radius: 6px; }
+.hb-music-bar-bg { display: block; position: relative; height: 4px; border-radius: 2px;
+  background: rgba(43, 127, 184, .16); }
+.hb-music-bar-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; border-radius: 2px;
+  background: #2b7fb8; }
+.hb-music-bar-fill::after { content: ''; position: absolute; right: -5px; top: 50%;
+  width: 9px; height: 9px; margin-top: -4.5px; border-radius: 50%; background: #fff;
+  border: 2px solid #2b7fb8; opacity: 0; transition: opacity .18s ease; }
+.hb-music-bar:hover .hb-music-bar-fill::after,
+.hb-music-bar.is-live .hb-music-bar-fill::after { opacity: 1; }
+.hb-music-times { display: flex; align-items: center; gap: 5px; justify-content: flex-end;
+  font-size: 11px; color: #98a2b0; margin-top: 7px; line-height: 1; }
+.hb-music-time-sep { opacity: .5; }
+/* 连着几首都放不出来的时候，时间那行变个色提个醒 */
+.hb-music-card.is-miss .hb-music-times { color: #c07a3e; }
+.hb-music-card .hb-card-hint a { color: #2b7fb8; }
+
+/* ---- 右列：每日三首的那三行 ----
+   一行一首：左边小封面（用真专辑图，取不到才用渐变），中间歌名 + 歌手，
+   右边一个小圆钮表示「点这首能播 / 正在播」。 */
+.hb-music-batch { margin: 2px 0 0; }
+.hb-music-batch li { padding: 7px 8px; margin: 0 -8px; }
+.hb-music-batch .hb-music-cover { background-color: rgba(43, 127, 184, .12); }
+.hb-music-batch .hb-music-play i { pointer-events: none; }
+/* 这一组下面的那条栏：换一批 + 一句说明 */
+.hb-music-foot { display: flex; align-items: center; gap: 10px; margin: 10px 0 0;
+  padding-top: 10px; border-top: 1px solid rgba(35, 42, 51, .07); }
+.hb-music-more { display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+  border: 0; border-radius: 999px; padding: 6px 13px; font-size: 12px; line-height: 1;
+  font-family: inherit;
+  background: rgba(43, 127, 184, .10); color: #2b7fb8;
+  transition: background .2s ease, transform .2s ease; }
+.hb-music-more:hover { background: rgba(43, 127, 184, .22); }
+.hb-music-more:active { transform: scale(.96); }
+.hb-music-more i { font-size: 10px; }
+.hb-music-note { font-size: 11px; color: #aeb6c2; margin-left: auto;
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#hb-music-audio { display: none; }
+
+/* ===== 卡片里的「文字由浅入深」 =====
+   greymac 那张白卡里，字一进画面是浅灰的，滑到位才变成深色。
+   这里照抄同样的手感：默认浅灰，元素顶边越过视口 72% 处就转深。
+   只有中间那列（标题 + 文章卡）参与，两侧小模块始终是深色，免得花。 */
+.hero-tab-card .reveal { color: #d3d8e2; transition: color .9s cubic-bezier(.22,.61,.36,1); }
+.hero-tab-card .reveal.is-in { color: #232a33; }
+.hero-tab-card .hb-post-title.reveal a,
+.hero-tab-card .hb-post-title a { color: inherit; }
+.hero-tab-card .hb-post.reveal .hb-post-meta,
+.hero-tab-card .hb-post.reveal .hb-post-excerpt { color: #d3d8e2;
+  transition: color .9s cubic-bezier(.22,.61,.36,1) .1s; }
+.hero-tab-card .hb-post.reveal.is-in .hb-post-meta { color: #98a2b0; }
+.hero-tab-card .hb-post.reveal.is-in .hb-post-excerpt { color: #5a6473; }
+.hero-tab-card .hb-post.reveal .hb-post-art { filter: grayscale(.55) brightness(1.06); }
+.hero-tab-card .hb-post.reveal.is-in .hb-post-art { filter: none;
+  transition: filter 1.1s cubic-bezier(.22,.61,.36,1); }
+
+@media (max-width: 1180px) {
+  .hero-blog { grid-template-columns: minmax(0, 1fr); max-width: 720px; }
+  .hero-blog-col--main { min-height: 0; }
+  .hero-blog-col--side { flex-direction: row; flex-wrap: wrap; }
+  .hero-blog-col--side .hb-card { flex: 1 1 240px; }
+}
+@media (max-width: 640px) {
+  .hero-blog { padding: 0 14px; }
+  .hero-blog-col--side { flex-direction: column; }
+  .hb-post { flex-direction: column; min-height: 0; }
+  .hb-post-art { order: 0; flex: 0 0 150px; }
+  /* 窄屏时封面挪到卡顶，圆钮会压在正文上，直接收掉（触屏本来也没有悬停） */
+  .hb-post-arrow { display: none; }
+  /* 手机上封面横在最上面，左右那套渐变化合就不成立了 ——
+     改成往下化进正文，接缝一样看不见。 */
+  .hb-post-art::after { background: linear-gradient(to bottom,
+    rgba(var(--hb-art-fade), 0) 58%, rgb(var(--hb-art-fade)) 100%); }
+}
+
+@media (max-width: 900px) {
+  .hero-scroll { height: 430vh; }
+  .hero-panel-inner { max-width: 74vw; padding: 14px 16px; }
+  .hero-panels > .hero-panel--about { --about-top: 54vh; }
+  /* r77：顶上那行跟电脑端一样贴在最上沿；手机上它会跟左上角的站名撞在
+     一个角上，所以下面把整条顶栏（站名 + 汉堡钮）整体往下让 18px，
+     变成「上面一行居中字 / 下面一行站名」，两行互不遮挡。 */
+  .hero-about-top { top: calc(0vh - var(--about-top)); }
+  html.hero-mode #nav { padding-top: 32px !important; }
+  .hero-panel[data-index="1"] { left: 5vw; top: 16vh; }
+  .hero-panel[data-index="2"] { right: 5vw; top: 14vh; }
+  .hero-panel[data-index="3"] { left: 5vw; bottom: 14vh; }
+  .hero-panel[data-index="4"] { right: 5vw; bottom: 12vh; }
+  .hero-panel-inner h3 { font-size: 17px; }
+  .hero-panel-inner p { font-size: 13px; }
+  .hero-frame { inset: -20px; border-width: 30px; border-radius: 68px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-scroll { height: 150vh; }
+  .hero-flow, .hero-flow::after { animation: none; }
+}
+
+/* ===== 让首页完全接管版面：隐藏主题的标题横幅与侧栏 ===== */
+/* 保留顶部导航、压平横幅区域 */
+.hero-mode #page-header { height: 0 !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important;
+  border: 0 !important; background: transparent !important; box-shadow: none !important; }
+.hero-mode #page-header .page-site-info, .hero-mode #page-header .title-seo { display: none !important; }
+/* 导航条焊死在左上角：不随滚动隐藏、不磨砂、不垫底色 */
+.hero-mode #nav { position: fixed !important; top: 0 !important; left: 0; right: 0; width: 100% !important;
+  z-index: 91; transform: none !important; opacity: 1 !important;
+  background: transparent !important; box-shadow: none !important;
+  -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+/* 右下角齿轮 / 返回顶部那两个蓝色小方块 */
+.hero-mode #rightside { display: none !important; }
+.hero-mode #aside-content { display: none !important; }
+.hero-mode #content-inner { display: block !important; width: 100% !important; max-width: none !important; margin: 0 !important; padding: 0 !important; }
+.hero-mode #content-inner > .layout { display: block !important; width: 100% !important; max-width: none !important; margin: 0 !important; padding: 0 !important; gap: 0 !important; }
+.hero-mode #page { width: 100% !important; max-width: none !important; margin: 0 !important; }
+.hero-mode #body-wrap { padding-top: 0 !important; }
+/* 背景整片是深蓝，导航字翻成浅色（原来在浅灰底上那套深色字，现在看不见了） */
+/* 浅色字带一圈深色描边：卡片顶边正好切到导航那行字的时候（那 20 来像素的滚动里），
+   字有一半压在米白上，有这圈描边仍然读得出来。 */
+.hero-mode #nav a, .hero-mode #nav .site-name, .hero-mode #nav .blog-info__title {
+  color: #e6f4fa !important;
+  text-shadow: 0 1px 6px rgba(3,18,28,.60), 0 0 3px rgba(3,18,28,.55); }
+.hero-mode #footer { margin-top: 0 !important; }
+.hero-mode .footer-other { padding-top: 18px; }
+
+/* 站点名只在最顶上露脸，一往下滑就淡出；右上角的菜单一直留着 */
+.hero-mode #nav #blog-info { transition: opacity .45s ease; }
+.hero-mode.hero-scrolled #nav #blog-info { opacity: 0; pointer-events: none; }
+
+/* 浅海底色（滚动条改成白的） */
+html.hero-mode { --scrollbar-color: rgba(255,255,255,.85); background-color: #3d9ac2 !important; }
+
+/* ===== 页面右侧那条滚动条：静止细、一靠上去「吸」地胀开 =====
+    原生滚动条不能直接改宽度做动画，但有个绕法：把整条轨道做宽（9px），
+    滑块本身用「透明边框 + background-clip: content-box」把可见部分挤细 ——
+    于是"看起来的粗细" = 轨道宽 - 两边边框。鼠标靠上去只要把边框调窄，
+    滑块就胀开了；顺手把边框宽度做成可过渡的，胀开就是滑出来的而不是跳出来的。
+    静止时露 5px（跟原来那条一样细，所以平时看不出区别），
+    可抓的范围却一直是 9px，比原来 5px 好按多了。
+   只写 html/body，是为了不动代码块自己那条横向滚动条（它还是主题原来那套）。 */
+html { --scrollbar-hover-color: var(--scrollbar-color); }
+html.hero-mode { --scrollbar-hover-color: rgba(255, 255, 255, 1); }
+html.hb-dark { --scrollbar-hover-color: rgba(232, 249, 255, .94); }
+
+html::-webkit-scrollbar, body::-webkit-scrollbar { width: 9px; }
+html::-webkit-scrollbar-track, body::-webkit-scrollbar-track { background: transparent; }
+html::-webkit-scrollbar-thumb, body::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-color);
+  background-clip: content-box; border: 2px solid transparent; border-radius: 999px;
+  transition: border-width .18s cubic-bezier(.22,.61,.36,1), background-color .18s ease; }
+/* 靠上去胀到 7px，按住拖动再胀到 9px（边框越窄，露出来的滑块越粗）。
+   is-sb-hot / is-sb-drag 是 hb-ui.js 贴上去的记号：原生滚动条的 :hover
+   有时候不太听话，自己盯一下鼠标到没到右边缘更稳。 */
+html.is-sb-hot::-webkit-scrollbar-thumb, body.is-sb-hot::-webkit-scrollbar-thumb,
+html::-webkit-scrollbar-thumb:hover, body::-webkit-scrollbar-thumb:hover {
+  border-width: 1px; background-color: var(--scrollbar-hover-color); }
+html.is-sb-drag::-webkit-scrollbar-thumb, body.is-sb-drag::-webkit-scrollbar-thumb,
+html::-webkit-scrollbar-thumb:active, body::-webkit-scrollbar-thumb:active {
+  border-width: 0; background-color: var(--scrollbar-hover-color); }
+
+/* 鼠标丝带（我们自己的 .hb-ribbon）现在是整站都有的：
+   首页整屏是海蓝，走加法发光；别的页白卡当道，脚本会自动换成半透明水彩，
+   两层画法都由 /js/hb-ribbon.js 自己判断，CSS 这边不用管。
+   唯一要留神的是它压在正文上面，所以不透明度调得很低（见那份脚本的 INK）。 */
+
+/* 丝带是 position:fixed 的，滚到尾页时正好横在照片上（照片那层 z-index 只有 0）。
+   把整块尾页抬到丝带之上，照片和字就重新干净了。 */
+.hero-mode #footer { position: relative; z-index: 4; }
+
+/* 整片页面底色交给 .hero-flow：这一层一层全部透明，流光才透得出来。
+   body 这里必须是透明的 —— 它如果带底色，会盖在 z-index:-1 的流光上面。 */
+body.hero-mode { background-color: transparent !important; }
+.hero-mode #body-wrap, .hero-mode #page, .hero-mode #content-inner { background-color: transparent !important; }
+.hero-mode #footer { background-color: transparent !important; background-image: none !important; }
+
+/* ===== 潜入深水：变身之后整屏转深蓝，导航与页脚文字翻成浅色 ===== */
+.hero-mode #nav, .hero-mode #nav a, .hero-mode #nav .site-name, .hero-mode #nav .blog-info__title,
+.hero-mode .hero-credit, .hero-mode .hero-hint {
+  transition: color .5s ease, text-shadow .5s ease, background-color .5s ease; }
+.hero-deep #nav a, .hero-deep #nav .site-name, .hero-deep #nav .blog-info__title {
+  color: #e8f5f8 !important; text-shadow: 0 1px 5px rgba(4,26,36,.55); }
+.hero-deep .hero-credit { color: #e4f6ff; opacity: .78; }
+.hero-deep .hero-hint { color: #eaf9ff; }
+.hero-deep .hero-vignette {
+  background: radial-gradient(128% 98% at 50% 45%, rgba(0,0,0,0) 52%, rgba(28,104,140,.14) 100%); }
+.hero-deep .hero-panel-inner { --hb-card-a: .68; --hb-card-edge: .54; }
+
+/* 白卡升上来盖住导航之后，导航那一片底色是米白，浅色字等于消失。
+   卡片顶边一进到导航这一带就把字翻回深色（hero.js 在盯着卡片的位置）。
+   这条必须写在上面 .hero-deep 那组之后 —— 权重一样，靠顺序压过去。 */
+/* 反过来：深色字带一圈浅色描边。在白卡上描边是白配白（看不见，不影响），
+   但在上面那条过渡带里，字还压在 3D 画面上时能把这半行字兜住。 */
+.hero-on-card #nav a, .hero-on-card #nav .site-name, .hero-on-card #nav .blog-info__title {
+  color: #2c3129 !important;
+  text-shadow: 0 1px 3px rgba(255,255,255,.75), 0 0 4px rgba(255,255,255,.9); }
+
+/* WebGL 起不来时会退回一张浅色静态海报（hero-fallback），
+   那种情况下浅色的导航字会看不见，所以这里还原成深色。必须放在最后，
+   跟上面 .hero-mode 那几条同权重，靠顺序压过去。 */
+.hero-fallback #nav a, .hero-fallback #nav .site-name, .hero-fallback #nav .blog-info__title {
+  color: #2c3129 !important; text-shadow: 0 1px 3px rgba(255,255,255,.55); }
+.hero-fallback .hero-hint, .hero-fallback .hero-credit { color: #4c5a52; }
+
+/* ============================================================
+   Kelo 版式的收尾页 · 浅海配色
+   这一块由主题页脚模板（includes/footer.pug）渲染，和「首页 / 其他页」的
+   切换全靠 html.hero-mode 那一个 class —— 模板里两块内容都生成，
+   靠下面这两条 display 决定露谁。这样文章页、归档页的页脚一点没动。
+   照片在 source/img/footer-pano.jpg（阳朔漓江全景，从中间裁的）。
+
+   版式：照片从顶上 110px 那条线往下铺满整条尾页，所有文字都压在照片上
+   （原来文字浮在照片上面那条蓝带子里，等于照片只当了背景板）。
+   Kelo 原版那个 220px 高的巨型字标已经拿掉了 —— 它是尾页被撑到一屏以上的
+   主因，去掉之后整条尾页回到 ~710px，一屏能装下。
+   顶上 110px 是留给「海水」的：那一段不铺照片，直接让页面自己的流光蓝
+   透出来，跟白卡两侧看到的是同一层蓝，中间没有渐变过渡，切口是硬的。
+
+   配色：Kelo 那版是「照片 + 60% 黑罩 + 白字」，太重了。这一版是
+   「照片 + 一层深海蓝的压暗 + 浅色字」，压暗的深浅按「哪里放字」排，
+   中段只留 13%，水面的亮和照片的原味都还在。
+   要整块翻回浅底深字：把 .kelo-bg::after 撤掉、下面那一串字色换成深蓝即可，
+   结构不用动（但深蓝字压在树叶、山体上会糊，得先解决对比度）。
+   ============================================================ */
+.kelo-footer { display: none; }
+.footer-classic { display: block; }
+html.hero-mode .kelo-footer { display: block; }
+html.hero-mode .footer-classic { display: none; }
+
+/* 负的 15px 上边距：把黑封往上提，让它正好咬住白卡下沿，
+   中间不残留那 15px 蓝色（.hero-after 的 padding-bottom）。 */
+html.hero-mode #footer { margin-top: -15px !important; }
+
+/* 注意：下面凡是带颜色的都要写 #footer 前缀。
+   主题里有 `#footer > * { color: var(--light-grey) }` 和 `#footer a { ... }`，
+   那两条是 id 级的，光写 .kelo-xxx 会被它们压掉（上一版就是这个毛病：
+   字全变成了主题的浅灰，压在浅底上几乎看不见）。 */
+#footer .kelo-footer {
+  position: relative; overflow: hidden;
+  /* 整条尾页不再自己铺底色：顶上那一段「海水」直接让页面自己的流光蓝透出来，
+     它跟白卡两侧看到的是同一层蓝，接得上，也就没有「渐变过渡」这回事了。
+     照片从 SEA_BAND（110px）那条线往下开始，硬边切口。 */
+  background-color: transparent;
+  /* 字压在照片上之后，深蓝字在树叶、山体那几块深色区域会整片糊掉（实测
+     「站点」「三维形象」几乎看不见）。所以这里跟 Kelo 那版一样翻成浅色字，
+     靠照片上面那层淡压暗来托底 —— 深色字只适合待在纯浅色的底上。 */
+  color: #f0f9ff;
+  /* 上内边距 = 海水带 110px + 文字离照片顶边的距离 64px。
+     这两个数要跟下面 .kelo-bg 的 top 一起改，改一个必须改另一个。 */
+  padding: 174px 0 60px; }
+
+/* 照片：从 110px 那条线往下全出血，一直铺到尾页最底。
+   顶上那条「由透明到实」的遮罩已经撤掉 —— 它原本是让照片化进海水里，
+   但那正是「一坨糊」的来源。现在是硬边：海水一条、照片一条，切口是干净的。
+   文字全部压在照片上，所以照片整体压暗一点点（见下面的 ::after）。 */
+.kelo-bg { position: absolute; left: 0; right: 0; bottom: 0; top: 110px; z-index: 0;
+  background-image: url('/img/footer-pano.jpg');
+  background-size: cover; background-position: center 42%; background-repeat: no-repeat; }
+/* 照片上面那层「压暗」：不是滤镜（滤镜会连饱和度一起吃进去），
+   只盖一层深海水色。深浅是按「哪里要放字」排的：
+   顶上 0~15% 是字最密的一带（字标 / 简介 / 三列链接都在这一块），
+   而照片这一带正好是整张最亮的天光 + 树叶，所以压到 50%；
+   往下中段只留 14%~20%，照片原味和水面的亮全留着；
+   最底下一档回一点点，把字标和水面压住。
+   这不是深色版那层 60% 黑罩 —— 整张照片仍然是亮的、看得清的。 */
+.kelo-bg::after { content: ''; position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(20, 92, 130, .62) 0%, rgba(18, 84, 122, .55) 12%,
+    rgba(12, 66, 100, .40) 24%, rgba(8, 48, 72, .20) 40%, rgba(6, 38, 58, .13) 62%,
+    rgba(4, 28, 44, .28) 100%); }
+.kelo-inner { position: relative; z-index: 10; }
+/* 浅色字在照片上最容易丢的地方是「亮天」那一块（白云、水面反光）。
+   这里给字垫一圈很淡的深色影子，亮底深底都兜得住；照片本身一个像素没动。 */
+#footer .kelo-logo,
+#footer .kelo-desc,
+#footer .kelo-social-label,
+#footer .kelo-social-name,
+#footer .kelo-col h4,
+#footer .kelo-col a,
+#footer .kelo-legal {
+  text-shadow: 0 1px 2px rgba(3, 20, 32, .58), 0 0 12px rgba(3, 20, 32, .38); }
+
+.kelo-top { display: flex; justify-content: space-between; align-items: flex-start;
+  gap: 48px; padding: 0 60px; }
+.kelo-brand { width: 30%; }
+.kelo-logo { font-size: 22px; font-weight: 800; letter-spacing: .18em; line-height: 1; }
+.kelo-desc { margin: 14px 0 0; max-width: 320px; font-size: 14px; line-height: 1.75;
+  color: rgba(233, 246, 255, .88); }
+
+.kelo-social { margin-top: 28px; }
+.kelo-social-label { display: block; margin-bottom: 14px; font-size: 11px;
+  font-weight: 700; letter-spacing: .18em; color: rgba(226, 244, 255, .78); }
+/* 竖排：一行一个平台，左边方块图标、右边平台名，整行都能点。
+   颜色一律带 #footer 前缀：主题里有一条 id 级的 `#footer a`，
+   不写前缀的话名字和图标会被它压掉色。 */
+.kelo-social-list { list-style: none; margin: 0; padding: 0;
+  display: flex; flex-direction: column; gap: 10px; }
+#footer .kelo-social-item { display: flex; align-items: center; gap: 12px;
+  width: fit-content; text-decoration: none; }
+#footer .kelo-icon { width: 38px; height: 38px; border-radius: 10px; color: #0d4a6b;
+  border: 1px solid rgba(255, 255, 255, .5); background: #fff;
+  display: flex; align-items: center; justify-content: center; flex: 0 0 auto;
+  transition: background-color .3s ease, border-color .3s ease, transform .3s ease; }
+/* 平台名压在照片上，用浅色字 + 上面那圈深色影子；白方块图标是实心的，
+   压在哪块底色上都一样清楚，所以这里只动字。 */
+#footer .kelo-social-name { font-size: 14px; letter-spacing: .02em; color: #eef9ff;
+  transition: color .3s ease; }
+#footer .kelo-social-item:hover .kelo-icon { background: #fff;
+  border-color: rgba(255, 255, 255, .85); transform: translateX(2px); }
+#footer .kelo-social-item:hover .kelo-social-name { color: #fff; }
+.kelo-icon svg { display: block; width: 17px; height: 17px; }
+
+.kelo-navs { width: 60%; display: flex; gap: 80px; justify-content: flex-end; }
+/* color 必须显式写：主题里有一条全局的 h1~h6 字色，权重比「继承」高，
+   不写的话这几个小标题会变成深蓝、压在照片上看不见。 */
+.kelo-col h4 { margin: 0 0 24px; font-size: 13px; font-weight: 600; letter-spacing: 1px;
+  color: rgba(216, 241, 255, .84); text-transform: uppercase;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+#footer .kelo-col a { display: block; font-size: 14px; line-height: 2.4; color: rgba(238, 250, 255, .94);
+  text-decoration: none; transition: color .3s ease; }
+#footer .kelo-col a:hover { color: #fff; }
+
+/* 这里原本是 Kelo 的招牌巨型字标（.kelo-mark / .kelo-clip，一个 220px 高的
+   "voyanissa"，字里透出照片）。它是把整条尾页撑到 966px（比一屏还高）的主因，
+   现在整块拿掉：模板里的 .kelo-mark 也一并删了，配套的 /img/footer-fill.jpg
+   从此没人引用。尾页高度掉到 ~710px，一屏装得下。要恢复就回这一版之前的备份。 */
+
+.kelo-legal { position: relative; margin-top: 48px; padding: 0 60px; display: flex; flex-wrap: wrap;
+  justify-content: center; gap: 8px 22px; font-size: 12px; line-height: 1.7;
+  color: rgba(224, 243, 255, .78); }
+/* 原来这里垫了一小块很淡的白（深色字版本用来把它从照片里托出来）。
+   字翻成浅色之后，白底反而会把字吃掉，所以撤掉 —— 现在靠字自己那圈深色影子。 */
+#footer .kelo-legal a { color: rgba(228, 245, 255, .82); text-decoration: none;
+  transition: color .3s ease; }
+#footer .kelo-legal a:hover { color: #fff; }
+.kelo-legal .footer-separator { margin: 0 4px; }
+
+@media (max-width: 768px) {
+  /* 窄屏也得先把海水带（110px）让过去，不然文字会掉回照片上面那条蓝带子里。
+    上内边距 = 110 + 44。 */
+  .kelo-footer { padding: 154px 0 44px; }
+  .kelo-top { flex-direction: column; gap: 44px; padding: 0 24px; }
+  .kelo-brand, .kelo-navs { width: 100%; }
+  .kelo-navs { justify-content: flex-start; gap: 32px; flex-wrap: wrap; }
+  .kelo-desc { max-width: none; }
+  .kelo-legal { padding: 0 24px; }
+}
+
+/* ============================================================
+   2026-09-26 r67 新加的四块
+   ① 左栏友情链接        ② 右栏定位天气 + 随机音乐
+   ③ 不是首页的页面也铺同一片流光蓝（html.hb-ocean）
+   ④ 黑夜模式（html.hb-dark）
+   底下所有颜色都成对写：上面那条是白天，紧跟着的 html.hb-dark 那条是黑天。
+   改配色记得两条一起改，不然切到黑天会有一块不变色。
+   ============================================================ */
+
+/* ---- ① 左栏：友情链接 ----
+   一行一个：左边是对方网站的标签页小图标（自动抓，抓不到显示名字第一个字），
+   右边是博客名字。列表长了卡片自己往下长，不用改别的。 */
+.hb-links-list { list-style: none; margin: 0; padding: 0;
+  display: flex; flex-direction: column; gap: 2px; }
+.hb-link { display: flex; align-items: center; gap: 10px; padding: 7px 8px;
+  border-radius: 12px; text-decoration: none; color: #3a444f; font-size: 13px;
+  transition: background .2s ease, color .2s ease, transform .2s ease; }
+.hb-link:hover { background: rgba(43, 127, 184, .09); color: #1f6ea3; transform: translateX(2px); }
+.hb-link-icon { position: relative; flex: 0 0 22px; width: 22px; height: 22px;
+  border-radius: 6px; overflow: hidden; background: #eaf1f6;
+  display: flex; align-items: center; justify-content: center; }
+.hb-link-icon img { position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover; display: block; }
+.hb-link-fallback { font-size: 12px; font-weight: 600; color: #2b7fb8; line-height: 1; }
+.hb-link-name { flex: 1 1 auto; min-width: 0; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---- ② 右栏：定位天气 ----
+   整张卡可以点，点一下重新定位 + 重新拉天气。 */
+.hb-weather-card { cursor: pointer; }
+.hb-weather-card.is-loading { opacity: .72; }
+.hb-weather-card.is-error .hb-weather-top i { color: #9aa7b4; }
+.hb-weather-foot:empty { display: none; }
+
+/* ---- ② 右栏：每日三首的「正在播放」那一行 ----
+   一行说清现在放的是哪首，右边跟着播放 / 暂停钮；下面才是进度条和三首歌。 */
+.hb-music-now { display: flex; align-items: center; gap: 10px; padding: 4px 2px 2px; }
+.hb-music-kicker { flex: 0 0 auto; align-self: flex-start; margin-top: 3px;
+  font-size: 11px; color: #aeb6c2; letter-spacing: .06em; }
+.hb-music-now .hb-music-info b { font-size: 14px; }
+/* 换歌时名字就地淡入一下（跟「今日一言」同一个动画） */
+.hb-music-now .hb-music-info b.is-swap { animation: hb-quote-in .38s cubic-bezier(.22,.61,.36,1); }
+/* 正在跟网易云取下一首：先把名字压淡，等确认能放了才换成新的 */
+.hb-music-info { transition: opacity .25s ease; }
+.hb-music-card.is-loading .hb-music-now .hb-music-info { opacity: .45; }
+
+/* ---- ③ 右下角三个小圆钮 ----
+   顺序从上到下：回到顶部 / 白天黑夜 / 回首页。
+   主题自带的那一列（#rightside：齿轮 + 返回顶部）整列关掉，改用这一列，
+   不然两列会叠在一起。 */
+#rightside { display: none !important; }
+.hb-fabs { position: fixed; right: 22px; bottom: 26px; z-index: 92;
+  display: flex; flex-direction: column; gap: 10px; }
+.hb-fab { width: 38px; height: 38px; padding: 0; border-radius: 50%; cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, .55);
+  background: rgba(255, 255, 255, .82); color: #2b7fb8; font-size: 14px;
+  display: flex; align-items: center; justify-content: center; text-decoration: none;
+  box-shadow: 0 6px 18px rgba(9, 48, 72, .18);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  transition: background .22s ease, color .22s ease, transform .22s ease; }
+.hb-fab:hover { background: #2b7fb8; color: #fff; transform: translateY(-2px); }
+.hb-fab:active { transform: translateY(0); }
+
+/* ---- ③ 不是首页的那些页（文章页 / 日历页…）也铺同一片流光蓝 ----
+   只有那一片蓝要透出来：body、#body-wrap、#content-inner 全部透明，
+   留 #page（文章卡）自己不透明，于是白卡就像浮在海面上。
+   页脚不透明是故意的 —— 它是主题自带的浅蓝底 + 浅色字，正好接得住。 */
+html.hb-ocean { background-color: #3d9ac2 !important; }
+html.hb-ocean body { background-color: transparent !important; background-image: none !important; }
+html.hb-ocean #body-wrap,
+html.hb-ocean #content-inner { background-color: transparent !important; }
+
+/* ---- ④ 黑夜模式 ----
+   开关在右下角那个月亮钮上，选择记在浏览器里，刷新还在。
+   主题自己的深色配色由 data-theme="dark" 驱动（文章页的卡片、
+   正文、目录那些都跟着它变），这一组管的是我自己那几块。 */
+html.hb-dark { background-color: #0b2c40 !important; }
+html.hb-dark { --scrollbar-color: rgba(214, 244, 255, .55); }
+
+/* 流光蓝的黑天版：同一片海，只是天黑了 —— 光斑还在，整体压深压青。
+   这一层必须比 hero.js 里那几个色号（乘过 DARK_BG 的）亮一点，
+   白天也是这个关系，理由见上面「浅海流光」那段注释。 */
+html.hb-dark .hero-flow {
+  background:
+    radial-gradient(44% 36% at 20% 24%, rgba(96, 198, 236, .30) 0%, rgba(96, 198, 236, 0) 70%),
+    radial-gradient(40% 32% at 80% 70%, rgba(72, 172, 216, .24) 0%, rgba(72, 172, 216, 0) 72%),
+    radial-gradient(66% 50% at 50% 112%, rgba(3, 16, 28, .58) 0%, rgba(3, 16, 28, 0) 72%),
+    linear-gradient(180deg, #1b5573 0%, #164a66 40%, #0f3a52 72%, #0b2c40 100%); }
+
+/* 遮罩底色的白天版：亮带位置跟黑天版完全一致（17.8% / 82%），只是整片海亮一档。
+   它只负责撑到「海画出第一帧」为止，两个版本还是得一起改。 */
+html:not(.hb-dark) .hero-loader-veil {
+  background: linear-gradient(180deg,
+    #55bae0 1.8%, #5dc0e6 8.9%, #6ed1f6 17.8%, #62c3e8 28.9%,
+    #4cacd3 40%, #47a6cd 50%, #4facd3 60%, #64c0e6 71.1%,
+    #59b2d9 82.2%, #3f98c0 92.2%, #348cb6 98.4%); }
+/* 默认（黑天）那串色标写在 .hero-loader-veil 本体上；这里只处理白天要盖掉它的情况。
+   注意顺序：这条规则的选择器权重比 .hero-loader-veil 高，所以能覆盖。 */
+html.hb-dark .hero-loader-core {
+  background: radial-gradient(circle at 38% 34%, #ffffff 0%, #a9dcf2 46%, #4f9fc4 100%);
+  box-shadow: 0 0 24px rgba(140,214,245,.7), 0 0 54px rgba(90,180,220,.45); }
+html.hb-dark .hero-loader-ring { border-color: rgba(206,238,252,.8); }
+
+/* 白卡 → 深夜蓝卡 */
+html.hb-dark .hero-tab-card { background: #0e1720;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, .55); }
+html.hb-dark .hb-card { background: #16212c; border-color: rgba(255, 255, 255, .07); }
+@media (hover: hover) and (pointer: fine) {
+  html.hb-dark .hb-card:hover { background-color: #1b2833;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, .30);
+    outline-color: rgba(232, 238, 246, .5); }
+}
+html.hb-dark .hb-card-title { color: #e8eef6; }
+html.hb-dark .hb-name, html.hb-dark .hb-stat b, html.hb-dark .hb-list-title { color: #e8eef6; }
+html.hb-dark .hb-music-info b { color: #e8eef6; }
+html.hb-dark .hb-tagline, html.hb-dark .hb-stat span, html.hb-dark .hb-card-hint,
+html.hb-dark .hb-muted { color: #8697a8; }
+html.hb-dark .hb-quote, html.hb-dark .hb-weather-city { color: #b9c7d6; }
+html.hb-dark .hb-quote-from, html.hb-dark .hb-weather-desc,
+html.hb-dark .hb-weather-foot { color: #8697a8; }
+html.hb-dark .hb-weather-top b { color: #e8eef6; }
+
+/* 文章卡 */
+html.hb-dark .hb-post { background: #16212c; border-color: rgba(255, 255, 255, .07);
+  --hb-art-fade: 22, 33, 44;
+  --hb-post-ink: #e8eef6; --hb-post-ink-bg: #16212c; }
+html.hb-dark .hb-post-hit:focus-visible { outline-color: #7fd2f5; }
+@media (hover: hover) and (pointer: fine) {
+  html.hb-dark .hb-post:hover { box-shadow: 0 4px 24px rgba(0, 0, 0, .30); }
+  html.hb-dark .hb-post:hover .hb-post-title a { color: #7fd2f5; }
+}
+html.hb-dark .hb-post-excerpt { color: #a9b7c6; }
+html.hb-dark .hb-post-meta { color: #8697a8; }
+html.hb-dark .hb-tag { background: rgba(79, 195, 247, .14); color: #7fd2f5; }
+html.hb-dark .hero-tab-card .reveal { color: #2b3a49; }
+html.hb-dark .hero-tab-card .reveal.is-in { color: #e8eef6; }
+html.hb-dark .hero-tab-card .hb-post.reveal .hb-post-excerpt { color: #2b3a49; }
+html.hb-dark .hero-tab-card .hb-post.reveal.is-in .hb-post-excerpt { color: #a9b7c6; }
+
+/* 友情链接 */
+html.hb-dark .hb-link { color: #b9c7d6; }
+html.hb-dark .hb-link:hover { background: rgba(79, 195, 247, .12); color: #7fd2f5; }
+html.hb-dark .hb-link-icon { background: #0e1720; }
+html.hb-dark .hb-link-fallback { color: #7fd2f5; }
+html.hb-dark .hb-music-kicker { color: #8697a8; }
+html.hb-dark .hb-music-item:hover { background: rgba(79, 195, 247, .10); }
+html.hb-dark .hb-music-item.is-active { background: rgba(79, 195, 247, .16); }
+html.hb-dark .hb-music-item.is-active .hb-music-info b { color: #7fd2f5; }
+html.hb-dark .hb-music-play { background: rgba(79, 195, 247, .14); color: #7fd2f5; }
+html.hb-dark .hb-music-item.is-active .hb-music-play { background: #2b7fb8; color: #fff; }
+html.hb-dark .hb-music-more { background: rgba(79, 195, 247, .14); color: #7fd2f5; }
+html.hb-dark .hb-music-more:hover { background: rgba(79, 195, 247, .26); }
+html.hb-dark .hb-music-note { color: #8697a8; }
+html.hb-dark .hb-music-foot { border-top-color: rgba(255, 255, 255, .07); }
+html.hb-dark .hb-music-toggle { background: #2b7fb8; color: #fff; }
+html.hb-dark .hb-music-bar-bg { background: rgba(79, 195, 247, .18); }
+html.hb-dark .hb-music-bar-fill { background: #7fd2f5; }
+html.hb-dark .hb-music-bar-fill::after { background: #16212c; border-color: #7fd2f5; }
+html.hb-dark .hb-music-times { color: #8697a8; }
+html.hb-dark .hb-music-card .hb-card-hint a { color: #7fd2f5; }
+
+/* 分镜上那几张介绍小卡：r77 起不管白天黑夜都保持原来那张白卡
+   （之前夜里被改成深蓝，用户说看着像「黑色的一坨」，要回原色）。
+   卡里的字色沿用上面 .hero-panel-inner h3 / p 的浅色底配色，不再单独覆盖。 */
+/* 黑天那层海压得很深，艺术字得反过来用亮色，白晕改成深晕。 */
+html.hb-dark .hero-about, html.hb-dark .hero-about-top { color: #eaf7ff; text-shadow: 0 2px 22px rgba(3, 18, 30, .78); }
+/* 「沃雅妮莎激推！！」正好压在她那条白领子上，光靠大范围的晕会糊掉，
+   再补一圈贴身的深晕，字才咬得住。 */
+html.hb-dark .hero-about-name { text-shadow: 0 1px 3px rgba(4, 22, 34, .92), 0 0 13px rgba(4, 22, 34, .6); }
+
+/* 右下角那三个小圆钮：夜里改成磨砂深蓝 */
+html.hb-dark .hb-fab { background: rgba(14, 26, 38, .82); color: #8fd8f5;
+  border-color: rgba(143, 216, 245, .28); box-shadow: 0 6px 18px rgba(0, 0, 0, .45); }
+html.hb-dark .hb-fab:hover { background: #2b7fb8; color: #fff; }
+
+/* ============================================================
+   2026-09-26 r67 ⑤ 日程日历（/calendar/ 那一页）
+   左边一个月历、右边这个月的日程，下面写批注。
+   颜色照旧成对写：白天一条、紧跟的 html.hb-dark 一条。
+   ============================================================ */
+.hb-cal { margin: 8px 0 4px; }
+
+/* 顶上：月份 + 左右翻页 + 右边那几个小工具 */
+.hb-cal-head { display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 12px; margin-bottom: 18px; }
+.hb-cal-nav { display: flex; align-items: center; gap: 10px; }
+.hb-cal-arrow { width: 34px; height: 34px; padding: 0; border-radius: 50%; cursor: pointer;
+  border: 1px solid rgba(43, 127, 184, .28); background: rgba(43, 127, 184, .08);
+  color: #2b7fb8; font-size: 13px; display: flex; align-items: center; justify-content: center;
+  transition: background .2s ease, color .2s ease; }
+.hb-cal-arrow:hover { background: #2b7fb8; color: #fff; }
+.hb-cal-title { font-size: 18px; font-weight: 700; letter-spacing: .02em; color: #24313d;
+  min-width: 132px; text-align: center; }
+.hb-cal-tools { display: flex; align-items: center; gap: 8px; }
+.hb-cal-mini { padding: 6px 12px; border-radius: 999px; cursor: pointer; font-size: 12px;
+  border: 1px solid rgba(43, 127, 184, .26); background: transparent; color: #2b7fb8;
+  transition: background .2s ease, color .2s ease; }
+.hb-cal-mini:hover { background: rgba(43, 127, 184, .12); }
+
+/* 中间：左边月历 + 右边日程清单 */
+.hb-cal-body { display: grid; grid-template-columns: minmax(0, 1fr) 268px; gap: 22px;
+  align-items: start; }
+.hb-cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.hb-cal-week { text-align: center; font-size: 12px; font-weight: 600; padding: 4px 0 6px;
+  color: #8697a8; letter-spacing: .06em; }
+.hb-cal-day { position: relative; aspect-ratio: 1 / .82; min-height: 48px; padding: 6px 4px 8px;
+  border-radius: 12px; cursor: pointer; font: inherit;
+  border: 1px solid transparent; background: rgba(43, 127, 184, .05); color: #3a444f;
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+  transition: background .18s ease, border-color .18s ease, color .18s ease, transform .18s ease; }
+.hb-cal-day:hover { background: rgba(43, 127, 184, .14); transform: translateY(-1px); }
+.hb-cal-num { font-size: 14px; font-weight: 600; line-height: 1.5; }
+.hb-cal-day.is-outside { opacity: .34; }
+.hb-cal-day.is-today { border-color: rgba(43, 127, 184, .5); font-weight: 700; }
+.hb-cal-day.has-note { background: rgba(43, 127, 184, .13); }
+.hb-cal-day.is-picked { background: #2b7fb8; border-color: #2b7fb8; color: #fff;
+  box-shadow: 0 8px 20px rgba(43, 127, 184, .32); }
+.hb-cal-day.is-picked .hb-cal-num { color: #fff; }
+.hb-cal-dots { display: flex; gap: 3px; margin-top: 3px; }
+.hb-cal-dot { width: 5px; height: 5px; border-radius: 50%; background: #2b7fb8; display: block; }
+.hb-cal-day.is-picked .hb-cal-dot { background: #cdeeff; }
+
+/* 右边那一列：这个月都有什么 */
+.hb-cal-side { border-radius: 14px; padding: 14px 14px 8px;
+  background: rgba(43, 127, 184, .06); }
+.hb-cal-side-title { margin: 0 0 10px; font-size: 13px; font-weight: 700;
+  letter-spacing: .04em; color: #24313d; }
+.hb-cal-empty { margin: 0; font-size: 12px; line-height: 1.7; color: #8697a8; }
+.hb-cal-list { list-style: none; margin: 0; padding: 0; }
+.hb-cal-item { margin: 0 0 2px; }
+.hb-cal-item-btn { display: flex; gap: 10px; align-items: baseline; width: 100%; text-align: left;
+  padding: 7px 8px; border: 0; border-radius: 10px; cursor: pointer; font: inherit;
+  background: transparent; color: #3a444f; transition: background .18s ease, color .18s ease; }
+.hb-cal-item-btn:hover { background: rgba(43, 127, 184, .13); color: #1f6ea3; }
+.hb-cal-item-when { flex: 0 0 auto; font-size: 11px; font-weight: 600; color: #2b7fb8;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.hb-cal-item-what { flex: 1 1 auto; min-width: 0; font-size: 13px; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; }
+
+/* 下面那一块：写批注 */
+.hb-cal-editor { margin-top: 22px; padding-top: 18px;
+  border-top: 1px solid rgba(43, 127, 184, .16); }
+.hb-cal-ed-head { display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+.hb-cal-notes { list-style: none; margin: 0 0 14px; padding: 0;
+  display: flex; flex-direction: column; gap: 8px; }
+.hb-cal-note { position: relative; border-radius: 12px; padding: 10px 44px 10px 12px;
+  background: rgba(43, 127, 184, .07); }
+.hb-cal-note-top { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.hb-cal-note-time { font-size: 11px; font-weight: 700; color: #2b7fb8;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.hb-cal-note-title { font-size: 14px; color: #24313d; }
+.hb-cal-note-body { margin: 5px 0 0; font-size: 12.5px; line-height: 1.7; color: #6b7885; }
+.hb-cal-del { position: absolute; top: 8px; right: 8px; width: 26px; height: 26px; padding: 0;
+  border-radius: 50%; cursor: pointer; border: 1px solid transparent; background: transparent;
+  color: #9aa7b4; font-size: 12px; display: flex; align-items: center; justify-content: center;
+  transition: background .18s ease, color .18s ease; }
+.hb-cal-del:hover { background: rgba(224, 92, 92, .14); color: #d9534f; }
+
+.hb-cal-form { display: flex; flex-direction: column; gap: 8px; }
+.hb-cal-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.hb-cal-input { flex: 1 1 auto; min-width: 0; padding: 9px 12px; border-radius: 10px;
+  font: inherit; font-size: 13px; color: #3a444f; background: #fff;
+  border: 1px solid rgba(43, 127, 184, .22); outline: none;
+  transition: border-color .18s ease, box-shadow .18s ease; }
+.hb-cal-input:focus { border-color: #2b7fb8; box-shadow: 0 0 0 3px rgba(43, 127, 184, .14); }
+.hb-cal-input--time { flex: 0 0 116px; }
+.hb-cal-textarea { resize: vertical; min-height: 52px; }
+.hb-cal-actions { display: flex; justify-content: flex-end; }
+.hb-cal-save { padding: 9px 20px; border-radius: 999px; cursor: pointer; font: inherit;
+  font-size: 13px; font-weight: 600; border: 0; color: #fff; background: #2b7fb8;
+  box-shadow: 0 8px 20px rgba(43, 127, 184, .28);
+  transition: background .2s ease, transform .2s ease; }
+.hb-cal-save:hover { background: #1f6ea3; transform: translateY(-1px); }
+.hb-cal-save:active { transform: translateY(0); }
+.hb-cal-hint { margin: 16px 0 0; font-size: 12px; line-height: 1.7; color: #8697a8; }
+
+/* 黑天：同一套东西换成深夜蓝 */
+html.hb-dark .hb-cal-title, html.hb-dark .hb-cal-side-title { color: #e8eef6; }
+html.hb-dark .hb-cal-day { background: rgba(79, 195, 247, .07); color: #b9c7d6; }
+html.hb-dark .hb-cal-day:hover { background: rgba(79, 195, 247, .16); }
+html.hb-dark .hb-cal-day.has-note { background: rgba(79, 195, 247, .15); }
+html.hb-dark .hb-cal-day.is-today { border-color: rgba(127, 210, 245, .55); }
+html.hb-dark .hb-cal-day.is-picked { background: #2b7fb8; color: #fff; }
+html.hb-dark .hb-cal-dot { background: #7fd2f5; }
+html.hb-dark .hb-cal-week, html.hb-dark .hb-cal-empty,
+html.hb-dark .hb-cal-hint, html.hb-dark .hb-cal-note-body { color: #8697a8; }
+html.hb-dark .hb-cal-side { background: rgba(79, 195, 247, .07); }
+html.hb-dark .hb-cal-item-btn { color: #b9c7d6; }
+html.hb-dark .hb-cal-item-btn:hover { background: rgba(79, 195, 247, .14); color: #7fd2f5; }
+html.hb-dark .hb-cal-item-when, html.hb-dark .hb-cal-note-time { color: #7fd2f5; }
+html.hb-dark .hb-cal-note { background: rgba(79, 195, 247, .08); }
+html.hb-dark .hb-cal-note-title { color: #e8eef6; }
+html.hb-dark .hb-cal-editor { border-top-color: rgba(127, 210, 245, .18); }
+html.hb-dark .hb-cal-input { background: #0e1720; color: #d7e3ee;
+  border-color: rgba(127, 210, 245, .24); }
+html.hb-dark .hb-cal-input:focus { border-color: #4fb0dd; box-shadow: 0 0 0 3px rgba(79, 176, 221, .18); }
+html.hb-dark .hb-cal-arrow { border-color: rgba(127, 210, 245, .3);
+  background: rgba(79, 195, 247, .1); color: #7fd2f5; }
+html.hb-dark .hb-cal-arrow:hover { background: #2b7fb8; color: #fff; }
+html.hb-dark .hb-cal-mini { border-color: rgba(127, 210, 245, .3); color: #7fd2f5; }
+html.hb-dark .hb-cal-mini:hover { background: rgba(79, 195, 247, .14); }
+
+@media (max-width: 768px) {
+  .hb-cal-body { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .hb-cal-day { min-height: 42px; }
+  .hb-cal-input--time { flex: 1 1 100%; }
+}
+
+/* ============================================================
+   2026-09-26 r73 侧栏「本月日程」小日历
+   三列布局里左栏最下面那张卡：只铺本月，整张卡点一下去 /calendar/。
+   今天 = 实心蓝圆；节日 = 淡红底 + 红字（鼠标停上去看名字）；
+   自己批注过的日子 = 底下一个小蓝点。
+   颜色照旧成对写：白天一条、紧跟的 html.hb-dark 一条。
+   ============================================================ */
+/* 悬停手感交给上面那条通用的 .hb-card:hover（抬起 + 影子 + 内描边），
+   这里只管内容排版。自己那套 transition 要撤掉，否则会把通用的过渡覆盖掉。 */
+.hb-mini-cal-card { display: block; text-decoration: none; color: inherit; }
+
+.hb-mini-cal-month { display: flex; align-items: center; justify-content: space-between;
+  margin: -4px 0 10px; }
+.hb-mini-cal-month b { font-size: 13px; font-weight: 700; color: #24313d; letter-spacing: .02em; }
+.hb-mc-more { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; color: #2b7fb8; }
+.hb-mc-more i { font-size: 9px; }
+
+.hb-mini-cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 1px; }
+.hb-mc-week { text-align: center; font-size: 10px; font-weight: 600; letter-spacing: .04em;
+  color: #98a2b0; padding-bottom: 4px; }
+.hb-mc-day { position: relative; aspect-ratio: 1 / .92; border-radius: 9px;
+  display: flex; align-items: center; justify-content: center; }
+.hb-mc-day.is-blank { visibility: hidden; }
+.hb-mc-num { width: 22px; height: 22px; border-radius: 50%; font-size: 12px; font-weight: 500;
+  color: #4a5563; line-height: 1; display: flex; align-items: center; justify-content: center;
+  transition: background .18s ease, color .18s ease; }
+.hb-mc-day.is-fest { background: rgba(226, 97, 79, .1); }
+.hb-mc-day.is-fest .hb-mc-num { color: #cf4f39; font-weight: 700; }
+.hb-mc-day.is-today .hb-mc-num { background: #2b7fb8; color: #fff; font-weight: 700;
+  box-shadow: 0 4px 10px rgba(43, 127, 184, .34); }
+.hb-mc-day.is-today.is-fest .hb-mc-num { background: #d9543f; box-shadow: 0 4px 10px rgba(217, 84, 63, .3); }
+.hb-mc-dot { position: absolute; left: 50%; bottom: 1px; width: 4px; height: 4px; margin-left: -2px;
+  border-radius: 50%; background: #2b7fb8; }
+
+.hb-mini-cal-fests { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
+.hb-mc-fest { font-size: 10.5px; line-height: 1; padding: 5px 8px; border-radius: 999px;
+  background: rgba(226, 97, 79, .1); color: #c9503c; }
+.hb-mc-fest--none { background: rgba(35, 42, 51, .05); color: #98a2b0; }
+.hb-mini-cal-foot { margin: 10px 0 0; font-size: 11px; color: #98a2b0; }
+
+/* 黑夜里那三张能按的卡：描边换成亮的湖蓝，别的跟着通用规则走 */
+html.hb-dark .hb-card.hb-mini-cal-card:hover,
+html.hb-dark .hb-card.hb-chat-card:hover,
+html.hb-dark .hb-card.hb-quote-card:hover,
+html.hb-dark .hb-card.hb-weather-card:hover { outline-color: rgba(127, 210, 245, .6); }
+html.hb-dark .hb-mini-cal-month b { color: #e8eef6; }
+html.hb-dark .hb-mc-more { color: #7fd2f5; }
+html.hb-dark .hb-mc-week { color: #7e8b99; }
+html.hb-dark .hb-mc-num { color: #b9c7d6; }
+html.hb-dark .hb-mc-day.is-fest { background: rgba(255, 143, 122, .13); }
+html.hb-dark .hb-mc-day.is-fest .hb-mc-num { color: #ff9d86; }
+html.hb-dark .hb-mc-day.is-today .hb-mc-num { background: #2b7fb8; color: #fff; }
+html.hb-dark .hb-mc-day.is-today.is-fest .hb-mc-num { background: #e2614f; }
+html.hb-dark .hb-mc-dot { background: #7fd2f5; }
+html.hb-dark .hb-mc-fest { background: rgba(255, 143, 122, .14); color: #ff9d86; }
+html.hb-dark .hb-mc-fest--none { background: rgba(255, 255, 255, .05); color: #8697a8; }
+html.hb-dark .hb-mini-cal-foot { color: #8697a8; }
+
+/* ============================================================
+   2026-09-27 r95 侧栏「和沃聊天」入口（左栏，日历下面那张）
+   点整张卡进 /chat/ 那一页。卡里就三样东西：
+   头像位那颗会呼吸的水珠、两行字、右下角一个「去找她 →」。
+   呼吸圈只用 transform / opacity（首页在解析 3D 模型时会卡一下，
+   用 left/top/width 这类属性动画会一起掉帧）。
+   悬停手感不用另写：上面那组通用规则已经把这张卡算进「能按的蓝描边」里了。
+   ============================================================ */
+.hb-chat-card { display: block; text-decoration: none; color: inherit; }
+.hb-chat-row { display: flex; align-items: center; gap: 12px; }
+.hb-chat-orb { position: relative; flex: 0 0 auto; width: 44px; height: 44px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; color: #fff; font-size: 18px;
+  background: radial-gradient(120% 120% at 32% 24%, #9fe9ff 0%, #2f86b4 58%, #17536f 100%);
+  box-shadow: 0 6px 16px rgba(43, 127, 184, .3); }
+/* 外面那圈水波：从水珠边上荡开就消失，循环往复 */
+.hb-chat-orb::after { content: ''; position: absolute; inset: -5px; border-radius: 50%;
+  border: 1px solid rgba(43, 127, 184, .5);
+  animation: hbChatPing 2.8s cubic-bezier(.22,.61,.36,1) infinite; }
+@keyframes hbChatPing {
+  0% { transform: scale(.84); opacity: .9; }
+  70%, 100% { transform: scale(1.28); opacity: 0; }
+}
+.hb-chat-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.hb-chat-text b { font-size: 13.5px; font-weight: 600; color: #24313d; line-height: 1.4; }
+.hb-chat-text em { font-style: normal; font-size: 11.5px; line-height: 1.6; color: #98a2b0;
+  margin-top: 3px; }
+.hb-chat-go { display: inline-flex; align-items: center; gap: 4px; margin-top: 13px;
+  font-size: 12px; font-weight: 600; color: #2b7fb8; }
+.hb-chat-go i { font-size: 9px; transition: transform .3s cubic-bezier(.32,.72,0,1); }
+@media (hover: hover) and (pointer: fine) {
+  .hb-card.hb-chat-card:hover .hb-chat-go i { transform: translateX(2px); }
+}
+html.hb-dark .hb-chat-text b { color: #e8eef6; }
+html.hb-dark .hb-chat-text em { color: #8697a8; }
+html.hb-dark .hb-chat-go { color: #7fd2f5; }
+html.hb-dark .hb-chat-orb { box-shadow: 0 6px 16px rgba(0, 0, 0, .45); }
+html.hb-dark .hb-chat-orb::after { border-color: rgba(127, 210, 245, .5); }
+
+/* ============================================================
+   2026-09-27 r95 中列「文章归档」索引
+   最新文章那两张卡下面垫一张干净的一行一条索引。
+   它有两个作用：一是不让中列在最后一张卡下面空一大片；
+   二是以后文章越写越多，这一列（连同白卡）自然就越来越长。
+   ============================================================ */
+.hb-archive-card { flex: 0 0 auto; }
+.hb-archive-list { list-style: none; margin: 0; padding: 0; }
+.hb-archive-link { display: flex; align-items: baseline; gap: 14px;
+  padding: 9px 10px; margin: 0 -10px; border-radius: 10px;
+  text-decoration: none; color: #5a6473; font-size: 13.5px;
+  transition: background-color .25s cubic-bezier(.32,.72,0,1),
+    color .25s cubic-bezier(.32,.72,0,1); }
+.hb-archive-link:hover { background: rgba(43, 127, 184, .075); color: #2b7fb8; }
+.hb-archive-title { flex: 1 1 auto; min-width: 0; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; }
+.hb-archive-date { flex: 0 0 auto; font-size: 12px; color: #98a2b0;
+  font-variant-numeric: tabular-nums; }
+.hb-archive-link:hover .hb-archive-date { color: #2b7fb8; }
+.hb-archive-foot { margin: 14px 0 0; font-size: 11.5px; color: #aeb6c2; }
+html.hb-dark .hb-archive-link { color: #b9c7d6; }
+html.hb-dark .hb-archive-link:hover { background: rgba(79, 195, 247, .12); color: #7fd2f5; }
+html.hb-dark .hb-archive-date { color: #8697a8; }
+html.hb-dark .hb-archive-link:hover .hb-archive-date { color: #7fd2f5; }
+html.hb-dark .hb-archive-foot { color: #8697a8; }
+
+/* ---- 中列最后那张「关于这里」 ----
+   只有两篇文章的时候，归档下面会空出好几百像素的白，看着像没加载完。
+   这张卡就是把那片空白填实：一句引子 + 两行小字，别的不放。 */
+.hb-about-card { flex: 0 0 auto; }
+.hb-about-lead { margin: 0 0 12px; font-size: 13.5px; line-height: 1.8; color: #3a444f; }
+.hb-about-line { margin: 0 0 8px; font-size: 12.5px; line-height: 1.8; color: #8697a8; }
+.hb-about-line:last-child { margin-bottom: 0; }
+html.hb-dark .hb-about-lead { color: #ccd8e4; }
+html.hb-dark .hb-about-line { color: #8697a8; }
+
+/* 日历整页里也把节日标出来：日子淡红、名字写格子里，右下角再列一行。
+   （这样从首页那张小日历点进来，红色标记不会「消失」。） */
+.hb-cal-day.is-fest { background: rgba(226, 97, 79, .09); }
+.hb-cal-day.is-fest .hb-cal-num { color: #cf4f39; }
+.hb-cal-day.is-fest.is-picked { background: #2b7fb8; }
+.hb-cal-day.is-fest.is-picked .hb-cal-num { color: #fff; }
+.hb-cal-fest { max-width: 100%; margin-top: 2px; padding: 0 5px; border-radius: 999px;
+  font-size: 9.5px; line-height: 1.5; white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; color: #cf4f39; background: rgba(226, 97, 79, .14); }
+.hb-cal-day.is-picked .hb-cal-fest { color: #fff; background: rgba(255, 255, 255, .22); }
+
+.hb-cal-festbox { margin-top: 14px; padding-top: 12px;
+  border-top: 1px solid rgba(43, 127, 184, .16); }
+.hb-cal-festbox-title { margin: 0 0 8px; font-size: 12px; font-weight: 700;
+  letter-spacing: .04em; color: #24313d; }
+.hb-cal-festchip { display: inline-block; margin: 0 5px 5px 0; padding: 4px 9px;
+  border-radius: 999px; font-size: 11px; background: rgba(226, 97, 79, .1); color: #c9503c; }
+
+html.hb-dark .hb-cal-day.is-fest { background: rgba(255, 143, 122, .12); }
+html.hb-dark .hb-cal-day.is-fest .hb-cal-num { color: #ff9d86; }
+html.hb-dark .hb-cal-fest { color: #ff9d86; background: rgba(255, 143, 122, .16); }
+html.hb-dark .hb-cal-festbox { border-top-color: rgba(127, 210, 245, .18); }
+html.hb-dark .hb-cal-festbox-title { color: #e8eef6; }
+html.hb-dark .hb-cal-festchip { background: rgba(255, 143, 122, .14); color: #ff9d86; }
+
+/* 窄屏时左右两栏会摊成横排，卡片会被拉得很宽 ——
+   小日历是「格子跟宽度等比撑高」的，不封顶会变成一块巨大的方块。 */
+@media (max-width: 1180px) {
+  .hb-mini-cal-card { max-width: 340px; }
+}
+@media (max-width: 640px) {
+  .hb-mini-cal-card { max-width: 420px; }
+}
+
+/* ============================================================
+   2026-09-26 r76 顶部菜单撤空之后的收尾
+   右上角那个「日历」入口删掉之后，导航和手机抽屉里各剩一个空的圆角容器
+   （手机抽屉里那块灰条看着像没加载完）。空着就直接藏掉，
+   以后往菜单里加回条目它会自己出来。
+   ============================================================ */
+#menus .menus_items:empty,
+#sidebar-menus .menus_items:empty { display: none; }
+
+/* 窄屏收尾：手机上卡片是整屏宽的，
+   ① 「换一批」右边那行小字原来贴着卡片最右边，会被右下角那三个悬浮钮压住，
+      改成换行后单独占一行、靠左放；
+   ② 三个悬浮钮本身也缩一圈、往角上挪一点，少挡内容。 */
+@media (max-width: 768px) {
+  .hb-music-foot { flex-wrap: wrap; row-gap: 8px; }
+  .hb-music-note { flex: 1 1 100%; margin-left: 0; }
+  .hb-fabs { right: 12px; bottom: 14px; gap: 8px; }
+  .hb-fab { width: 34px; height: 34px; font-size: 13px; }
+}
+
+/* ============================================================
+   2026-09-27 r95 「和沃聊天」整页（/chat/ 那一页）
+   页面本身只有一个空占位，聊天窗是 /js/hb-chat.js 画进去的，
+   所以这一整块都用 hbc- 开头的名字（hb chat 的 c）。
+
+   风格：白天是一张白卡里漂着蓝气泡；黑夜整块沉进水里
+   （深海底色 + 亮蓝描边），跟站点其他地方的夜配色一路。
+   动效只走 opacity / transform —— 首页那颗模型在解析时会占住主线程，
+   这里再堆 left / width 这类属性动画会把两边一起拖卡。
+   ============================================================ */
+.hbc-page { margin: 4px 0 8px; }
+
+.hbc-shell { display: flex; flex-direction: column;
+  height: min(72vh, 720px); min-height: 420px;
+  border-radius: 20px; overflow: hidden;
+  border: 1px solid rgba(43, 127, 184, .18);
+  background: linear-gradient(180deg, #fbfdff 0%, #f4f8fc 100%);
+  box-shadow: 0 18px 48px rgba(9, 48, 72, .1); }
+
+/* ---- 顶栏：官方头像（右下角挂一颗小水珠当在线灯）+ 名字 + 右上角余量 ---- */
+.hbc-head { flex: 0 0 auto; display: flex; align-items: center; gap: 12px;
+  padding: 15px 20px; border-bottom: 1px solid rgba(43, 127, 184, .14); }
+.hbc-ava { position: relative; flex: 0 0 auto; width: 42px; height: 42px; }
+.hbc-ava img { display: block; width: 100%; height: 100%; border-radius: 50%;
+  object-fit: cover; background: #fff; }
+.hbc-ava::after { content: ""; position: absolute; inset: 0; border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(43, 127, 184, .28); pointer-events: none; }
+.hbc-dot { position: absolute; right: -1px; bottom: -1px; width: 11px; height: 11px;
+  border-radius: 50%; background: #2b7fb8;
+  box-shadow: 0 0 0 2.5px #fbfdff, 0 0 8px rgba(43, 127, 184, .45); }
+.hbc-who { display: flex; flex-direction: column; font-size: 14px; font-weight: 700;
+  letter-spacing: .02em; color: #24313d; line-height: 1.35; }
+.hbc-who small { font-size: 11.5px; font-weight: 400; color: #98a2b0; letter-spacing: 0; }
+.hbc-meter { margin-left: auto; text-align: right; font-size: 11.5px; line-height: 1.6;
+  color: #8697a8; }
+
+/* ---- 对话区 ---- */
+.hbc-log { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 20px;
+  display: flex; flex-direction: column; gap: 12px; }
+.hbc-row { display: flex; }
+.hbc-row.me { justify-content: flex-end; }
+.hbc-bubble { max-width: 78%; padding: 10px 14px; border-radius: 16px;
+  font-size: 14.5px; line-height: 1.7; white-space: pre-wrap; word-break: break-word; }
+.hbc-row.her .hbc-bubble { color: #22303c;
+  background: linear-gradient(160deg, rgba(126, 199, 233, .42), rgba(168, 219, 242, .3));
+  border: 1px solid rgba(43, 127, 184, .2); border-bottom-left-radius: 5px; }
+.hbc-row.me .hbc-bubble { color: #17394d;
+  background: rgba(43, 127, 184, .13); border: 1px solid rgba(43, 127, 184, .22);
+  border-bottom-right-radius: 5px; }
+
+.hbc-sys { align-self: center; max-width: 88%; text-align: center;
+  padding: 6px 13px; border-radius: 999px; font-size: 12px; line-height: 1.6;
+  color: #6b7885; background: rgba(43, 127, 184, .07);
+  border: 1px solid rgba(43, 127, 184, .14); }
+
+/* 流式输出时跟在字后面的小光标 */
+.hbc-caret { display: inline-block; width: 7px; height: 14px; margin-left: 2px;
+  vertical-align: -2px; background: #2b7fb8;
+  animation: hbcBlink .9s steps(1, end) infinite; }
+@keyframes hbcBlink { 50% { opacity: 0; } }
+
+/* 「正在打字」那三个点：只晃 opacity，不动布局 */
+.hbc-typing .hbc-bubble { display: flex; align-items: center; gap: 5px; padding: 13px 15px; }
+.hbc-typing .hbc-bubble span { width: 6px; height: 6px; border-radius: 50%;
+  background: #2b7fb8; animation: hbcBounce 1.15s ease-in-out infinite; }
+.hbc-typing .hbc-bubble span:nth-child(2) { animation-delay: .16s; }
+.hbc-typing .hbc-bubble span:nth-child(3) { animation-delay: .32s; }
+@keyframes hbcBounce { 0%, 60%, 100% { opacity: .3; } 30% { opacity: 1; } }
+
+/* ---- 底下的输入条 ---- */
+.hbc-form { flex: 0 0 auto; display: flex; align-items: flex-end; gap: 10px;
+  padding: 14px 16px 8px; border-top: 1px solid rgba(43, 127, 184, .14); }
+.hbc-input { flex: 1 1 auto; min-width: 0; height: 46px; max-height: 150px;
+  padding: 12px 14px; border-radius: 14px; resize: none; font: inherit;
+  font-size: 14.5px; line-height: 1.6; color: #22303c; outline: none;
+  border: 1px solid rgba(43, 127, 184, .22); background: #fff;
+  transition: border-color .2s ease, box-shadow .2s ease; }
+.hbc-input::placeholder { color: #a8b2bf; }
+.hbc-input:focus { border-color: #2b7fb8; box-shadow: 0 0 0 3px rgba(43, 127, 184, .13); }
+.hbc-input:disabled { background: #f4f6f9; color: #a8b2bf; }
+.hbc-send { flex: 0 0 auto; height: 46px; padding: 0 24px; border: 0; cursor: pointer;
+  border-radius: 14px; font: inherit; font-weight: 700; color: #fff;
+  background: linear-gradient(160deg, #4aa7d6, #2b7fb8);
+  transition: filter .2s ease, transform .18s ease; }
+.hbc-send:hover { filter: brightness(1.06); }
+.hbc-send:active { transform: translateY(1px); }
+.hbc-send:disabled { opacity: .45; cursor: default; }
+.hbc-foot { flex: 0 0 auto; margin: 0; padding: 0 18px 14px; text-align: center;
+  font-size: 11.5px; line-height: 1.6; color: #a2acb9; }
+
+/* ---- 黑夜：整块沉到水下 ---- */
+html.hb-dark .hbc-shell { border-color: rgba(127, 210, 245, .2);
+  background: linear-gradient(180deg, #0e2a3d 0%, #0b2132 100%);
+  box-shadow: 0 20px 54px rgba(0, 0, 0, .38); }
+html.hb-dark .hbc-head { border-bottom-color: rgba(127, 210, 245, .14); }
+html.hb-dark .hbc-ava::after { box-shadow: inset 0 0 0 1px rgba(127, 210, 245, .34); }
+html.hb-dark .hbc-dot { background: #7fd2f5;
+  box-shadow: 0 0 0 2.5px #0e2a3d, 0 0 12px rgba(127, 210, 245, .8); }
+html.hb-dark .hbc-who { color: #e8eef6; }
+html.hb-dark .hbc-who small, html.hb-dark .hbc-meter { color: #8697a8; }
+html.hb-dark .hbc-row.her .hbc-bubble { color: #e6f3fd;
+  background: linear-gradient(160deg, rgba(56, 132, 172, .5), rgba(28, 84, 118, .5));
+  border-color: rgba(127, 210, 245, .2); }
+html.hb-dark .hbc-row.me .hbc-bubble { color: #dceffb;
+  background: rgba(127, 210, 245, .15); border-color: rgba(127, 210, 245, .26); }
+html.hb-dark .hbc-sys { color: #b9c7d6; background: rgba(255, 255, 255, .05);
+  border-color: rgba(127, 210, 245, .16); }
+html.hb-dark .hbc-caret { background: #7fd2f5; }
+html.hb-dark .hbc-typing .hbc-bubble span { background: #7fd2f5; }
+html.hb-dark .hbc-form { border-top-color: rgba(127, 210, 245, .14); }
+html.hb-dark .hbc-input { color: #eaf6ff; background: rgba(3, 17, 28, .6);
+  border-color: rgba(127, 210, 245, .22); }
+html.hb-dark .hbc-input::placeholder { color: #6f8496; }
+html.hb-dark .hbc-input:focus { border-color: rgba(127, 210, 245, .55);
+  box-shadow: 0 0 0 3px rgba(127, 210, 245, .12); }
+html.hb-dark .hbc-input:disabled { background: rgba(3, 17, 28, .4); color: #6f8496; }
+html.hb-dark .hbc-send { color: #04202f;
+  background: linear-gradient(160deg, #7fe3ff, #3f9cc8); }
+html.hb-dark .hbc-foot { color: #6f8496; }
+
+/* 窄屏：聊天窗占满大半屏高，气泡让出一点宽度 */
+@media (max-width: 640px) {
+  /* 高度收一档，整块聊天窗能落在右下角那三个悬浮钮上面，
+     不用滚着看；输入条和底下那行小字再往左让 56px，
+     免得被悬浮钮压住（它们是钉在屏幕右下角的，不跟着页面走）。 */
+  .hbc-shell { height: min(66vh, 560px); border-radius: 16px; }
+  .hbc-bubble { max-width: 86%; }
+  .hbc-head { padding: 13px 15px; gap: 10px; }
+  .hbc-ava { width: 34px; height: 34px; }
+  .hbc-ava img { width: 34px; height: 34px; }
+  .hbc-head .hbc-meter { font-size: 11px; }
+  .hbc-log { padding: 15px; }
+  .hbc-form { padding: 12px 56px 6px 12px; }
+  .hbc-send { padding: 0 18px; }
+  .hbc-foot { padding: 0 56px 12px 14px; }
+}
+
+/* ---- 聊天页（/chat/）自己再收两处 ----
+   ① 底下那条蓝页脚整条藏掉。别的页面它是浅蓝底 + 浅色字、接得住海面，
+      但这一页的正文是一整块会呼吸的聊天窗，脚注横在下面只剩碍眼。
+      版权那两行在首页和文章页都还在，只是这一页不显示。
+   ② 把外面那圈卡片框去掉（白天原来是张白卡、黑天是近黑的 #121212，
+      所以看起来像给聊天窗套了个黑相框）。底色一律透明，让聊天窗直接浮在海面上，
+      它自己那层圆角渐变 + 描边就够了。
+   html 上的 hb-chat-page 是 /chat/ 在 <head> 里自己打的（见主题 _config.yml 的 inject）。 */
+html.hb-chat-page #footer { display: none !important; }
+html.hb-chat-page #page { background-color: transparent !important; box-shadow: none !important; }

@@ -1,0 +1,17 @@
+.DS_Store
+Thumbs.db
+db.json
+*.log
+node_modules/
+public/
+.deploy*/
+_multiconfig.yml
+
+# 开发过程中的临时截图，不属于站点源码
+hero-*.png
+
+# 密钥类文件一律不进仓库
+secret.local.json
+*.local.json
+.dev.vars
+.wrangler/

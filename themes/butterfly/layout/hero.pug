@@ -1,0 +1,302 @@
+extends includes/layout.pug
+
+block content
+  script document.body.classList.add('hero-mode'); document.documentElement.classList.add('hero-mode')
+  #hero
+    //- 首屏加载遮罩。3D 模型要在浏览器里解析一段时间（网速 + 机器决定），
+    //- 这段时间画布是空的；以前就是「进来先看见一片空海，人过一会儿才浮出来」。
+    //- 现在先用这一层盖住，等 hero.js 报到 ready 再整层淡出。
+    //- 「.hero-loader-art」那一格是留给自定义动画素材的替换位，
+    //- 现在先用一圈纯 CSS 的水波顶着（见 hero.css 里「首屏加载遮罩」那段）。
+    .hero-loader#hero-loader
+      //- 只用来盖住「画布还没画出第一帧」那一小段：海一画出来就整层让位，
+      //- 之后遮罩只剩下面那圈水波和两行字，浮在真海上。
+      .hero-loader-veil
+      .hero-loader-art
+        span.hero-loader-ring
+        span.hero-loader-ring
+        span.hero-loader-ring
+        span.hero-loader-core
+      //- 那圈在动的发光水环（素材见下面 .hero-sticky 里那行 video 的注释）真播起来了，
+      //- 就把这圈兜底的纯 CSS 水波撤掉 —— 两个脉动叠在同一格上会打架。
+      //- 没报到（网慢 / 禁自动播 / 老浏览器）就继续用纯 CSS 那套顶着。
+      //- 放在行内是为了不额外发请求；但要等文档解析完再找那个 video ——
+      //- 它在 .hero-sticky 里，位置比这块遮罩靠后，此刻还没被解析出来。
+      //- 等「真的播起来」（playing）才算报到：光 loadeddata 的话，
+      //- 万一自动播放被拦，会露一帧不动的定格。
+      script.
+        (function () {
+          var hook = function () {
+            var v = document.getElementById('hero-ring-video');
+            if (!v) return;
+            var art = document.querySelector('.hero-loader-art');
+            var on = function () {
+              v.classList.add('is-live');
+              if (art) art.classList.add('is-live');
+            };
+            if (v.readyState >= 2 && !v.paused) on();
+            else v.addEventListener('playing', on, { once: true });
+          };
+          if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', hook, { once: true });
+          else hook();
+        })();
+      p.hero-loader-title 沃雅妮莎
+      p.hero-loader-sub#hero-loader-sub 正在浮出水面…
+    .hero-flow
+    .hero-frame
+    .hero-scroll
+      .hero-sticky
+        canvas.hero-canvas
+        .hero-fx
+          .hero-fx-blur
+          .hero-fx-shade
+        .hero-vignette
+        .hero-panels
+          //- 0：开场那一屏，不放资料卡。
+          //-    页面最顶上（沃雅妮莎头顶那块空白里）是「组成我的 —— 打字机」，
+          //-    中间那组艺术字从上往下是「沃雅妮莎激推！！/ About Me / WELCOME」。
+          //-    想换那句循环播放的词，改 /js/hero.js 里的 ABOUT_WORDS 清单。
+          .hero-panel.hero-panel--about(data-index='0')
+            .hero-about-top
+              .hero-about-line
+                span.hero-about-lead 组成我的 ——
+                span.hero-about-word#hero-about-word
+            .hero-about
+              .hero-about-name 沃雅妮莎激推！！
+              .hero-about-kicker About Me
+              .hero-about-welcome WELCOME
+          .hero-panel(data-index='1')
+            .hero-panel-inner
+              .hero-kicker 01 / 你好
+              h3 关于这个形象
+              p
+                | 这个界面用3D建模设计
+                br
+                | 滚动就能看到不同角度
+          .hero-panel(data-index='2')
+            .hero-panel-inner
+              .hero-kicker 02 / 我在做什么
+              h3 管院大一·狂暴学习中
+              p 筹备摄影策划，准备机器人比赛，coding社团任务中。。
+              .hero-tags
+                span 二次元摄影
+                span 排球
+                span 专业课
+                span 建模
+          .hero-panel(data-index='3')
+            .hero-panel-inner
+              .hero-kicker 03 / 转过身
+              h3 我的爱好超级多，待开发…
+              p 来和我交朋友
+          .hero-panel(data-index='4')
+            .hero-panel-inner
+              .hero-kicker 04 / 近一点
+              h3 关于这个网站
+              p
+                | coding by deepseek v4.1 flash
+                br
+                | 蓝色大肥鱼很好用哦
+          .hero-panel(data-index='5')
+            .hero-panel-inner
+              .hero-kicker 05 / 继续向下
+              h3 下面是博客
+              p 文章、作品和联系方式都排在后面。
+        .hero-hint 向下滚动
+        .hero-credit 模型提供 miHoYo · 改造 观海子 · 仅作学习展示
+        //- 加载遮罩里那圈发光水环。素材是 B 站「乖，咱睡觉」里一段在动的光晕，
+        //- 掐了一段正放 + 倒放拼成无缝循环（7 秒 / 460px / 160KB），原片是纯黑底
+        //- 加青白的发光。黑的地方不抠图 —— 交给叠加混合（screen）当透明使：
+        //- 屏幕混合本来就是「加光」，发光素材用它天经地义，还能省掉透明通道
+        //- （这台机器上编不出带透明通道的 webm；mp4 全平台能播，最省心）。
+        //-
+        //- 位置很关键：它必须待在 .hero-sticky 这一层里、跟画布同辈，排在最后。
+        //- 屏幕混合只跟「同一个隔离组里、排在它下面」的东西混合；以前把它放在
+        //- 加载遮罩（.hero-loader）里，那层是 position:fixed、自带隔离组，混不到
+        //- 画布上的海，黑的就还原成黑方块，只能再拿一块静态色块垫在下面假装是海 ——
+        //- 而海一直在动（实测同一格，进来第 2 秒和第 10 秒能差 30 档），静态色块
+        //- 怎么调都会露出一块方砖。搬进这一层就没事了：黑 = 它下面原本的画面，
+        //- 无缝、自动跟着海（以及白天/黑夜两套底色）走，连池子都不需要。
+        //-
+        //- 加载完（hero.js 的 hideLoader）会给它挂 .is-off 淡出并暂停播放。
+        video.hero-ring-video#hero-ring-video(
+          autoplay='' muted='' loop='' playsinline='' preload='auto'
+          aria-hidden='true' tabindex='-1')
+          source(src='/img/hero-ring.mp4' type='video/mp4')
+    //- ============================================================
+    //- 白卡里的博客页：左中右三列
+    //-   左右两列是窄的小模块（资料卡、站点统计、天气、歌单…），
+    //-   中间一列是文章大卡：右侧挂一块渐变「封面」，左边是标题 / 日期 / 摘要 / 标签。
+    //-   封面默认用 CSS 画的渐变，不依赖任何图片；哪篇文章在 front-matter 里
+    //-   写了 cover，那张卡就改用真图（渐变自动让位）。
+    //-   文章数是自动的：_posts 里有几篇就出几张卡，不用改模板。
+    //- ============================================================
+    - const posts = site.posts.sort('-date').toArray()
+    - const sinceYear = theme.footer.owner.since || 2025
+    - const uptimeDays = Math.max(1, Math.floor((Date.now() - new Date(sinceYear + '/01/01 00:00:00').getTime()) / 86400000))
+    - const lastUpdate = posts.length ? date(posts[0].date, 'YYYY-MM-DD') : '—'
+    section.hero-after
+      .hero-tab-card
+        .hero-blog
+          aside.hero-blog-col.hero-blog-col--side
+            .hb-card.hb-profile
+              .hb-avatar
+                img(src=url_for(theme.avatar.img) alt='头像')
+              .hb-name= config.author
+              .hb-tagline= config.subtitle
+              .hb-stats
+                .hb-stat
+                  b= site.posts.length
+                  span 文章
+                .hb-stat
+                  b= site.categories.length
+                  span 分类
+                .hb-stat
+                  b= site.tags.length
+                  span 标签
+            //- 友情链接：一行一个，图标自动抓对方网站的标签页小图标。
+            //- 要加人 / 改名字，改 /js/hb-widgets.js 顶上那份 FRIENDS 清单。
+            .hb-card.hb-links-card
+              h3.hb-card-title 友情链接
+              ul.hb-links-list#hb-links-list
+            //- 本月日程：一张小小的缩略月历（今天 / 节日 / 自己批注过的日子
+            //- 都有标记），整张卡点一下就去 /calendar/ 那一页写日程。
+            //- 画格子的人是 /js/hb-minical.js，节日数据在 /js/hb-holidays.js。
+            a.hb-card.hb-mini-cal-card#hb-mini-cal(href=url_for('/calendar/'),
+              aria-label='打开日程日历，可以自己批注')
+              h3.hb-card-title
+                | 本月日程
+                span.hb-beta 测试中
+              .hb-mini-cal-month
+                b#hb-mini-cal-month ——
+                span.hb-mc-more 查看全部
+                  i.fas.fa-chevron-right
+              .hb-mini-cal-grid#hb-mini-cal-grid
+              .hb-mini-cal-fests#hb-mini-cal-fests
+              p.hb-mini-cal-foot#hb-mini-cal-foot
+            //- 和沃聊天：点进去是单独一页（/chat/），那边接的是 Cloudflare 上的中转站。
+            //- 钥匙和她的完整人设都锁在中转站里，网页这边一个字节都看不到。
+            //- 入口想改文案就改这几行；要换接口地址去改 /js/hb-chat.js 顶上那个常量。
+            a.hb-card.hb-chat-card#hb-chat-card(href=url_for('/chat/'),
+              aria-label='和沃雅妮莎聊两句')
+              h3.hb-card-title 和沃聊天
+              .hb-chat-row
+                span.hb-chat-orb(aria-hidden='true')
+                  i.fas.fa-water
+                span.hb-chat-text
+                  b 沃雅妮莎在水底等着
+                  em 点一下就能跟她说说话
+              span.hb-chat-go 去找她
+                i.fas.fa-chevron-right
+          main.hero-blog-col.hero-blog-col--main
+            h2.hb-list-title.reveal
+              | 最新文章
+              span.hb-list-count= posts.length + ' 篇'
+            .hb-posts
+              each post, i in posts
+                - const brief = strip_html(post.excerpt || post.content).replace(/\s+/g, ' ').trim().slice(0, 76)
+                - const cat = post.categories && post.categories.length ? post.categories.first().name : ''
+                article.hb-post.reveal
+                  span.hb-post-art(aria-hidden='true')
+                    span.hb-post-art-img(
+                      class=post.cover ? false : 'hb-art-' + (i % 5),
+                      style=post.cover ? `background-image:url('${url_for(post.cover)}')` : false)
+                  .hb-post-body
+                    h3.hb-post-title
+                      a(href=url_for(post.path), tabindex='-1')= post.title
+                    .hb-post-meta
+                      span.hb-meta-item
+                        i.fas.fa-calendar-alt
+                        = date(post.date, 'YYYY-MM-DD')
+                      if cat
+                        span.hb-meta-item
+                          i.fas.fa-folder-open
+                          = cat
+                    p.hb-post-excerpt= brief + '…'
+                    if post.tags && post.tags.length
+                      .hb-post-tags
+                        each t in post.tags.toArray().slice(0, 4)
+                          span.hb-tag= '#' + t.name
+                  //- 铺满整张卡的链接：卡片上任何位置都能点进文章
+                  a.hb-post-hit(href=url_for(post.path), aria-label=post.title)
+                  //- 右下角那枚圆钮：只在鼠标停到卡上时滑出来（纯装饰，点它等于点整张卡）
+                  span.hb-post-arrow(aria-hidden='true')
+                    i.fas.fa-arrow-right
+            //- 文章归档：全部文章一行一条的索引。
+            //- 有它垫在下面，中列不会在最后一张卡下面空一大片；
+            //- 以后文章越写越多，这一列（和白卡）也就自然越长。
+            section.hb-card.hb-archive-card.reveal
+              h3.hb-card-title 文章归档
+              ul.hb-archive-list
+                each post in posts
+                  li.hb-archive-item
+                    a.hb-archive-link(href=url_for(post.path))
+                      span.hb-archive-title= post.title
+                      span.hb-archive-date= date(post.date, 'YYYY-MM-DD')
+              p.hb-archive-foot 共 #{posts.length} 篇 · 还在慢慢攒
+            //- 关于这里：中列最后垫一张小卡。文章还少的时候，
+            //- 归档下面是好几百像素的空白，白卡看着像没加载完；
+            //- 这张卡正好把那片空白填实，也不用编内容。
+            section.hb-card.hb-about-card.reveal
+              h3.hb-card-title 关于这里
+              p.hb-about-lead 上半页是沃雅妮莎的三维形象，滚动换视角；下半页放文章和记录。
+              p.hb-about-line 文章还少，在慢慢攒。摄影、建模、社团的事都会往这儿放。
+              p.hb-about-line 想随便聊两句，左边那张「和沃聊天」点进去就行。
+          aside.hero-blog-col.hero-blog-col--side
+            //- 定位天气：问浏览器要位置 → 当地实况（脚本在 /js/hb-weather.js）
+            .hb-card.hb-weather-card#hb-weather-card
+              h3.hb-card-title 你在的地方
+              .hb-weather-top
+                i.fas.fa-cloud#hb-weather-icon
+                b#hb-weather-temp ——
+              p.hb-weather-city#hb-weather-city 正在定位…
+              p.hb-weather-desc#hb-weather-desc
+              p.hb-weather-foot#hb-weather-foot
+            //- 今日一言：进页面自动拉一句，点卡片任意位置换一句（脚本在 /js/hb-widgets.js）
+            .hb-card.hb-quote-card#hb-quote-card
+              h3.hb-card-title 今日一言
+              p.hb-quote#hb-hitokoto 正在打捞今天的句子…
+              p.hb-quote-from#hb-hitokoto-from —— 一言
+              p.hb-card-hint 点一下换一句
+            //- 随机音乐：每次进来随机挑一首，点一下再随机换一首（脚本在 /js/hb-widgets.js）
+            //- 歌单和封面配色都在那份脚本的 SONGS 清单里，想加歌就照格式加一行。
+            //- 真正出声的是这张卡里藏着的浏览器播放器，画面上的进度条和圆钮都是自己画的，
+            //- 所以不会再弹出网易云官方播放器那个白色方框。
+            .hb-card.hb-music-card#hb-music-card
+              h3.hb-card-title 网易云 · 每日三首
+              .hb-music-now
+                span.hb-music-kicker 正在播放
+                .hb-music-info
+                  b#hb-music-name 正在挑歌…
+                  span#hb-music-artist
+                .hb-music-btns
+                  button.hb-music-toggle#hb-music-toggle(type='button' title='播放 / 暂停' aria-label='播放或暂停')
+                    i.fas.fa-play
+              .hb-music-bar#hb-music-bar(role='slider' tabindex='0' aria-label='播放进度')
+                span.hb-music-bar-bg
+                  span.hb-music-bar-fill#hb-music-fill
+                .hb-music-times
+                  span#hb-music-cur 00:00
+                  span.hb-music-time-sep /
+                  span#hb-music-dur --:--
+              ul.hb-music.hb-music-batch#hb-music-batch
+              .hb-music-foot
+                button.hb-music-more#hb-music-more(type='button' title='换一批' aria-label='换一批')
+                  i.fas.fa-rotate
+                  span 换一批
+                span.hb-music-note#hb-music-note
+              audio#hb-music-audio(preload='none')
+              p.hb-card-hint 点歌名直接播 · 三首放完自动换下一组
+
+  //- 惯性滚动（Lenis）：和 greymac 用的是同一个库、同一个版本。
+  //- 只挂在首页，文章页/归档页还是浏览器原生滚动。
+  script(src='/js/lenis.min.js')
+  script(type='module', src='/js/hero.js')
+  //- 网易云的曲子清单（从公开接口取回、逐首验过能放的），要排在挂件脚本前面
+  script(src='/js/hb-songs.js')
+  //- 首页右栏那两个小挂件：今日一言（hitokoto）+ 每日三首（网易云外链）
+  script(src='/js/hb-widgets.js')
+  //- 定位天气小卡片
+  script(src='/js/hb-weather.js')
+  //- 侧栏那张「本月日程」小日历：节日数据在前，画格子的在后
+  script(src='/js/hb-holidays.js')
+  script(src='/js/hb-minical.js')
