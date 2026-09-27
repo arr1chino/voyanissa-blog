@@ -1472,25 +1472,60 @@ html.hb-chat-page #page { background-color: transparent !important; box-shadow: 
    往下滑、顶栏收成固定条之后才换成文章名，此时「返回首页」还藏在悬停动画里
    ——.nav-page-title 里的两个 span 是叠在一起做上下交替的，
    一个平时 opacity:0、绝对定位在下面，鼠标停上去才浮出来。
-   现在文章页统一成一副：文章名和「返回首页」一直并排，站点名整个不再出现。
-   .post-bg 这个 class 只有文章页的 #page-header 会带上，
+   现在文章页统一成一副：平时就是文章名，鼠标停上去整块绕横轴翻半圈，
+   背面那颗「← 返回首页」顺势翻到正面；鼠标移开再翻回去。
+   站点名整个不再出现。.post-bg 这个 class 只有文章页的 #page-header 会带上，
    所以首页、日历页、聊天页的左上角不受影响。 */
 #page-header.post-bg #blog-info > .nav-site-title { display: none !important; }
-#page-header.post-bg #blog-info > .nav-page-title { display: inline !important; }
 
+/* 翻转要有人看着才有立体感：透视放在外层，转动放在标题那一条上。
+   透视只影响被 transform 的元素（这里只有下面那个翻转），
+   没动的文字照旧是平的。 */
+#page-header.post-bg #blog-info { perspective: 620px; }
+
+#page-header.post-bg #blog-info > .nav-page-title {
+  display: inline-block !important;
+  /* 主题在 .nav-page-title 上写了 overflow: hidden（原来的上下交替动画要在框里藏字），
+     翻转时会把翻到背面的那一面裁掉，这里必须放开。 */
+  overflow: visible !important;
+  transform-style: preserve-3d;
+  transition: transform .52s cubic-bezier(.36, .72, .26, 1);
+  will-change: transform;
+}
+#page-header.post-bg #blog-info > .nav-page-title:hover { transform: rotateX(180deg); }
+
+/* 正面：文章名。它照旧待在文档流里 —— 顶栏那块宽度就是它撑出来的，
+   所以翻转前后位置不跳。 */
 #page-header.post-bg .nav-page-title > :first-child,
 #page-header.post-bg .nav-page-title:hover > :first-child {
   opacity: 1 !important;
-  transform: none !important;
+  transform: rotateX(0deg) !important;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  transition: none;
 }
 
+/* 背面：「← 返回首页」。自己先翻半圈，等外层转过去正好正着朝观众。
+   绝对定位是照主题的老办法（它本来就把第二个 span 摘出行外），
+   位置摆回标题左边、垂直居中，字比标题略长也不会被裁（顶栏那一条很宽）。 */
 #page-header.post-bg .nav-page-title > :last-child,
 #page-header.post-bg .nav-page-title:hover > :last-child {
-  position: static !important;
+  position: absolute !important;
+  top: 50% !important;
+  left: 0 !important;
+  margin: 0 !important;
+  white-space: nowrap;
   opacity: 1 !important;
-  transform: none !important;
-  margin-left: 14px;
-  vertical-align: middle;
+  transform: translateY(-50%) rotateX(180deg) !important;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  transition: none;
+}
+
+/* 关了动效的就别翻了：直接停在「文章名」这一面，照样点得回首页。 */
+@media (prefers-reduced-motion: reduce) {
+  #page-header.post-bg #blog-info > .nav-page-title { transition: none; }
+  #page-header.post-bg #blog-info > .nav-page-title:hover { transform: none; }
 }
 
 /* ============================================================
