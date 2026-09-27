@@ -1,5 +1,8 @@
 /* ===== 整站的两个小零件（每一页都会加载） =====
-   1) 右下角三个小圆钮：回到顶部 / 白天黑夜切换 / 回首页。
+   1) 右下角三个小圆钮：回到顶部 / 白天黑夜切换 / 回博客第一页。
+      第三个钮（水波那个）落点是首页那张白卡 —— 也就是「最新文章」列表的第一页。
+      在首页就直接滚过去；在文章页 / 日历页这些地方，先按 href 回首页（URL 带 #blog），
+      落回来之后再靠 maybeAutoBlog() 滚到卡片上。
    2) 深海底色：不是首页的那些页（文章页、日历页…）也铺上同一片流光蓝，
       内容卡片还是白的浮在上面 —— 这样整站看着是同一个人做的。
 
@@ -51,6 +54,45 @@
     }
   }
 
+  /* ===== 第三个钮：去博客第一页 =====
+     「博客第一页」就是首页那张白卡（.hero-tab-card，里面是「最新文章」三列），
+     不在这页上（文章页、日历页…）的时候先去不了，靠下面的自动跳补上。 */
+  function blogCard() {
+    return document.querySelector('.hero-tab-card') || document.querySelector('.hero-after');
+  }
+
+  function toBlog(opt) {
+    var card = blogCard();
+    if (!card) return false;
+    var instant = opt && opt.instant;
+    // 14px 的余量：卡片顶边正好贴住导航那行字，不贴着视口最上沿
+    var y = Math.max(0, Math.round(card.getBoundingClientRect().top + (window.scrollY || window.pageYOffset || 0) - 14));
+    if (window.__hero && typeof window.__hero.scrollTo === 'function' && !instant) {
+      window.__hero.scrollTo(y, { duration: 1.1 });
+    } else if (window.__hero && typeof window.__hero.jump === 'function') {
+      window.__hero.jump(y);
+    } else if (instant) {
+      window.scrollTo(0, y);
+    } else {
+      window.scrollTo({ top: y, behavior: 'smooth' });
+    }
+    return true;
+  }
+
+  /* 从别的页面点那个钮过来：URL 上带着 #blog，落回来后再补一次跳转。
+     首页的 3D 是异步加载的，卡片的位置要等 .hero-scroll 撑起来才算得准，
+     所以这里等 __hero 就位（最多等 8 秒，等不到就放弃）。 */
+  function maybeAutoBlog() {
+    if (location.hash !== '#blog') return;
+    var tries = 0;
+    var timer = setInterval(function () {
+      if (++tries > 40) { clearInterval(timer); return; }
+      if (!window.__hero || typeof window.__hero.jump !== 'function') return;
+      clearInterval(timer);
+      setTimeout(function () { toBlog({ instant: true }); }, 260);
+    }, 200);
+  }
+
   function buildButtons() {
     if (document.getElementById('hb-fabs')) return;
 
@@ -62,7 +104,7 @@
         '<i class="fas fa-arrow-up"></i></button>' +
       '<button id="hb-fab-theme" class="hb-fab" type="button" title="切换到黑夜模式" aria-label="切换到黑夜模式">' +
         '<i class="fas fa-moon"></i></button>' +
-      '<a id="hb-fab-home" class="hb-fab" href="/" title="回到首页" aria-label="回到首页">' +
+      '<a id="hb-fab-home" class="hb-fab" href="/#blog" title="回到博客第一页" aria-label="回到博客第一页">' +
         '<i class="fas fa-water"></i></a>';
     document.body.appendChild(box);
 
@@ -72,6 +114,10 @@
       saveTheme(next);
       paintTheme(next);
       window.dispatchEvent(new CustomEvent('hb-theme-change', { detail: next }));
+    });
+    // 在首页（能滚到卡片）就拦下来自己滚，省一次白屏重载
+    document.getElementById('hb-fab-home').addEventListener('click', function (e) {
+      if (toBlog()) e.preventDefault();
     });
   }
 
@@ -256,6 +302,7 @@
     paintTheme(readTheme());
     buildOcean();
     buildButtons();
+    maybeAutoBlog();
     bindScrollbar();
     bindCopyRows();
     bindTitleFlip();
