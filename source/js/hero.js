@@ -1047,7 +1047,7 @@ function renderSkyOnly(now) {
 }
 
 /* 海画出来了 —— 把遮罩里那层「挡空画布」的底色撤掉（见 hero.css）。
-   从这一刻起遮罩只剩水波和文字，浮在真正在动的海面上。 */
+   从这一刻起遮罩只剩水环素材和文字，浮在真正在动的海面上。 */
 let skyLive = false;
 function markSkyLive() {
   if (skyLive) return;
@@ -1063,12 +1063,11 @@ function hideLoader() {
   const el = document.getElementById('hero-loader');
   if (!el || el.classList.contains('is-done')) return;
   el.classList.add('is-done');
-  /* 遮罩里那圈发光水环（真素材是个视频，住在 .hero-sticky 里，见 hero.pug）
-     跟着遮罩一起淡出；淡完就把视频暂停，别让它一直在角色脸上空转烧电。 */
-  const ring = document.getElementById('hero-ring-video');
-  if (ring) {
-    ring.classList.add('is-off');
-    setTimeout(() => { try { ring.pause(); } catch (e) {} }, 700);
+  /* 加载页那条水环素材（.hero-loader-video，见 hero.pug）跟着遮罩一起淡出；
+     淡完顺手把它暂停 —— 留着它继续解码只是白白烧电。 */
+  const loaderVideo = el.querySelector('.hero-loader-video');
+  if (loaderVideo) {
+    setTimeout(() => { try { loaderVideo.pause(); } catch (e) {} }, 900);
   }
   setTimeout(() => el.remove(), 900);
 }

@@ -6,40 +6,24 @@ block content
     //- 首屏加载遮罩。3D 模型要在浏览器里解析一段时间（网速 + 机器决定），
     //- 这段时间画布是空的；以前就是「进来先看见一片空海，人过一会儿才浮出来」。
     //- 现在先用这一层盖住，等 hero.js 报到 ready 再整层淡出。
-    //- 「.hero-loader-art」那一格是留给自定义动画素材的替换位，
-    //- 现在先用一圈纯 CSS 的水波顶着（见 hero.css 里「首屏加载遮罩」那段）。
+    //- 加载页铺的就是素材本身：B 站那段在动的水环（见下面 video 上面的注释）。
     .hero-loader#hero-loader
-      //- 只用来盖住「画布还没画出第一帧」那一小段：海一画出来就整层让位，
-      //- 之后遮罩只剩下面那圈水波和两行字，浮在真海上。
+      //- 兜底底色：只在这条视频播不出来的时候才看得见（断网 / 禁自动播放）。
+      //- 视频是纯黑的，铺满之后就把它盖住了，平时根本不露面。
       .hero-loader-veil
-      .hero-loader-art
-        span.hero-loader-ring
-        span.hero-loader-ring
-        span.hero-loader-ring
-        span.hero-loader-core
-      //- 那圈在动的发光水环（素材见下面 .hero-sticky 里那行 video 的注释）真播起来了，
-      //- 就把这圈兜底的纯 CSS 水波撤掉 —— 两个脉动叠在同一格上会打架。
-      //- 没报到（网慢 / 禁自动播 / 老浏览器）就继续用纯 CSS 那套顶着。
-      //- 放在行内是为了不额外发请求；但要等文档解析完再找那个 video ——
-      //- 它在 .hero-sticky 里，位置比这块遮罩靠后，此刻还没被解析出来。
-      //- 等「真的播起来」（playing）才算报到：光 loadeddata 的话，
-      //- 万一自动播放被拦，会露一帧不动的定格。
-      script.
-        (function () {
-          var hook = function () {
-            var v = document.getElementById('hero-ring-video');
-            if (!v) return;
-            var art = document.querySelector('.hero-loader-art');
-            var on = function () {
-              v.classList.add('is-live');
-              if (art) art.classList.add('is-live');
-            };
-            if (v.readyState >= 2 && !v.paused) on();
-            else v.addEventListener('playing', on, { once: true });
-          };
-          if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', hook, { once: true });
-          else hook();
-        })();
+      //- 加载页的主角：B 站素材里那圈在动的水环。原片 44 秒、右上角带着原 UP 主的水印，
+      //- 这里把水印裁掉了，取中间 10 秒「正放 + 倒放」拼成 20 秒无缝循环，压成
+      //- /img/loader-ring.mp4（960×960、约 1.1MB、无音轨）。黑的地方不抠图 ——
+      //- 整帧铺在遮罩上，黑就是加载页的底色，四周自然无缝。
+      //-
+      //- poster 是同一段素材的第一帧，视频解出第一帧之前先顶着它，免得进来先闪一下纯黑。
+      //- 这一条很关键：模型解析那会儿主线程是堵的，光等 video 的 playing 事件会白等
+      //- 一两秒，那段时间就会露回以前那圈纯 CSS 水波（报到的时机以前就是这么迟的）。
+      //- 视频是独立解码的，不吃主线程，铺上去之后从第一帧起就是素材本身在动。
+      video.hero-loader-video(
+        autoplay='' muted='' loop='' playsinline='' preload='auto'
+        poster='/img/loader-poster.jpg' aria-hidden='true' tabindex='-1')
+        source(src='/img/loader-ring.mp4' type='video/mp4')
       p.hero-loader-title 沃雅妮莎
       p.hero-loader-sub#hero-loader-sub 正在浮出水面…
     .hero-flow
@@ -103,25 +87,6 @@ block content
               p 文章、作品和联系方式都排在后面。
         .hero-hint 向下滚动
         .hero-credit 模型提供 miHoYo · 改造 观海子 · 仅作学习展示
-        //- 加载遮罩里那圈发光水环。素材是 B 站「乖，咱睡觉」里一段在动的光晕，
-        //- 掐了一段正放 + 倒放拼成无缝循环（7 秒 / 460px / 160KB），原片是纯黑底
-        //- 加青白的发光。黑的地方不抠图 —— 交给叠加混合（screen）当透明使：
-        //- 屏幕混合本来就是「加光」，发光素材用它天经地义，还能省掉透明通道
-        //- （这台机器上编不出带透明通道的 webm；mp4 全平台能播，最省心）。
-        //-
-        //- 位置很关键：它必须待在 .hero-sticky 这一层里、跟画布同辈，排在最后。
-        //- 屏幕混合只跟「同一个隔离组里、排在它下面」的东西混合；以前把它放在
-        //- 加载遮罩（.hero-loader）里，那层是 position:fixed、自带隔离组，混不到
-        //- 画布上的海，黑的就还原成黑方块，只能再拿一块静态色块垫在下面假装是海 ——
-        //- 而海一直在动（实测同一格，进来第 2 秒和第 10 秒能差 30 档），静态色块
-        //- 怎么调都会露出一块方砖。搬进这一层就没事了：黑 = 它下面原本的画面，
-        //- 无缝、自动跟着海（以及白天/黑夜两套底色）走，连池子都不需要。
-        //-
-        //- 加载完（hero.js 的 hideLoader）会给它挂 .is-off 淡出并暂停播放。
-        video.hero-ring-video#hero-ring-video(
-          autoplay='' muted='' loop='' playsinline='' preload='auto'
-          aria-hidden='true' tabindex='-1')
-          source(src='/img/hero-ring.mp4' type='video/mp4')
     //- ============================================================
     //- 白卡里的博客页：左中右三列
     //-   左右两列是窄的小模块（资料卡、站点统计、天气、歌单…），

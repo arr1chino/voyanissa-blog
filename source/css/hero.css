@@ -45,94 +45,50 @@
 
 /* ===== 首屏加载遮罩 =====
    3D 模型要在浏览器里解析一段时间（几百毫秒到一两秒，看网速和机器）。
-   现在这段时间并不是「空海」：hero.js 会先把海画出来（renderSkyOnly），
-   所以这一层只干三件事 ——
-     1) 盖住「画布第一帧还没出来」那零点几秒（.hero-loader-veil）
-     2) 转那圈水波 + 两行字，告诉人「正在加载」
-     3) 挡住底下的点击
-   角色真正画出来的那一帧，遮罩整层淡出；因为背景从头到尾都是同一片
-   在动的水，淡出时不会有任何接缝。
+   这段时间以前就是「进来先看见一片空海，人过一会儿才浮出来」，所以有了这一层 ——
+   现在这一层铺的就是加载页本身：一段在动的水环素材（.hero-loader-video，
+   见 hero.pug 里那行 video 上面的注释），黑底铺满整个屏幕、中间一圈发光的水涡。
+   素材是独立解码的，不吃主线程；模型画出来的那一帧，整层淡出。
+   底下那层 .hero-loader-veil 是兜底：视频播不出来（断网 / 禁自动播放）时才看得见。
    注意：动画只允许用 transform / opacity —— 模型解析时主线程会卡住一秒多，
-   只有交给合成器的那两种属性才能在那段时间里继续动。
-   「.hero-loader-art」是留给自定义动画素材的替换位，现在先用纯 CSS 的水波顶着。 */
+   只有交给合成器的那两种属性才能在那段时间里继续动。 */
 .hero-loader { position: fixed; inset: 0; z-index: 120;
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  background: transparent;
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
+  padding-bottom: 9vh; background: #000;
   transition: opacity .8s cubic-bezier(.22,.61,.36,1), visibility .8s; }
 /* 加载中还挡住底下的点击，免得点穿到看不见的导航 / 卡片上去 */
 .hero-loader.is-done { opacity: 0; visibility: hidden; pointer-events: none; }
-/* 盖住「画布第一帧还没出来」那一小段。以前这一层是常驻的，还按量出来的
-   色标去凑海的颜色 —— 问题是海里那条亮带一直在慢慢漂，静态渐变永远对不准，
-   遮罩淡出的时候就会看见一块对不上的蓝（实测中段能差到 90 多）。
-   现在 hero.js 让海从第一帧就真的画出来，这层只要撑到那一刻就退场，
-   之后露出来的就是同一片在动的水，接缝从根上没有了。 */
+/* 兜底底色。以前这层是常驻的，还按量出来的色标去凑海的颜色 —— 问题是海里那条
+   亮带一直在慢慢漂，静态渐变永远对不准，遮罩淡出时就会看见一块对不上的蓝
+   （实测中段能差到 90 多）。现在加载页的主角换成真素材（下面那条 video），
+   整层底色也是纯黑，这层就退化成「视频播不出来（断网 / 禁自动播放）」时的备胎：
+   至少还是一块和素材同色的干净黑，压在上面的两行字照样看得清。 */
 .hero-loader-veil { position: absolute; inset: 0; z-index: 0; opacity: 1;
-  background: linear-gradient(180deg,
-    #326e85 1.8%, #417e94 8.9%, #4f8ea4 17.8%, #39748a 28.9%,
-    #266078 40%, #235d75 50%, #235c74 60%, #30677e 71.1%,
-    #457e94 82.2%, #457d93 92.2%, #3c728a 98.4%);
+  background: #000;
   transition: opacity .55s cubic-bezier(.22,.61,.36,1); }
 .hero-loader.is-sky .hero-loader-veil { opacity: 0; }
-/* 素材位：原来就一圈纯 CSS 水波（132px），现在换成那圈真在动的发光水环
-   （真素材是 .hero-ring-video，住在 .hero-sticky 里，见下）。
-   这一格只剩「兜底」：四个 span 里那圈水波和中间的光核。
-   水环的视频一播起来（脚本给它和这一格一起挂 .is-live）就把兜底撤掉 ——
-   两个脉动叠在同一格上会打架。水波的 opacity 写在关键帧里，声明式的 opacity
-   压不住它，所以这里用 visibility。 */
-.hero-loader-art { position: relative; z-index: 1; width: 240px; height: 240px; margin-bottom: 26px; }
-.hero-loader-art.is-live .hero-loader-ring,
-.hero-loader-art.is-live .hero-loader-core { animation: none; visibility: hidden; }
-@media (max-width: 560px) {
-  .hero-loader-art { width: 176px; height: 176px; margin-bottom: 22px; }
+/* 加载页那条水环素材：整帧铺满，object-fit: contain —— 素材是正方形的，
+   四周那一圈黑就是画面本身的黑，屏幕上多出来的黑边跟它一模一样，
+   所以不管窗口多宽多窄都不会被裁掉，也不用去凑边的颜色。
+   scale(.8) 是把它收进来一点：既不顶到屏幕边，也给底下那两行字让出位置。 */
+.hero-loader-video { position: absolute; inset: 0; z-index: 1;
+  width: 100%; height: 100%; object-fit: contain; background: #000;
+  transform: scale(.8); transform-origin: 50% 46%; pointer-events: none; }
+/* 竖屏（手机）：contain 会把正方形素材缩成「屏幕宽度」那么大，水环只剩中间一小团，
+   上下全是黑，空得厉害。这里换成 cover —— 素材铺满屏幕高度、左右溢出裁掉，
+   水环正好撑满宽度。裁掉的左右两侧本来就是素材自己的黑底，跟加载页底色一样，
+   看不出接缝；缩放收到 .92 是为了不顶到屏幕两边。 */
+@media (max-aspect-ratio: 1/1) {
+  .hero-loader-video { object-fit: cover; transform: scale(.92); }
 }
 
-/* ===== 加载遮罩里那圈发光水环（真素材）=====
-   它是 hero.pug 里 .hero-sticky 的最后一个孩子，跟画布同辈 —— 为什么非要
-   放在那一层，见 hero.pug 里那行 video 上面的注释（一句话：屏幕混合只认
-   同一个隔离组里排在它下面的东西，搁在加载遮罩里就混不到海，黑的会露成方砖）。
-   这里只负责把它摆在跟 .hero-loader-art 那一格完全重合的位置上：
-   遮罩是「竖向居中 + 那圈水波 + 两行字」的一列，素材格因此不是画面正中，
-   而是正中再往上抬 53px（240 高的一半是 120，加起来 173）—— 这两个数就是
-   从实际布局里量出来的，改遮罩那一列的间距/字号时要跟着复核。 */
-.hero-ring-video { position: absolute; left: 50%; top: 50%;
-  width: 240px; height: 240px; margin: -173px 0 0 -120px;
-  object-fit: contain; mix-blend-mode: screen; pointer-events: none;
-  opacity: 0; visibility: hidden;
-  transition: opacity .6s cubic-bezier(.22,.61,.36,1), visibility .6s; }
-/* 视频报到（inline 脚本挂上 .is-live）才露脸；报到之前一直是透明的，
-   露出来的是上面那圈兜底水波。 */
-.hero-ring-video.is-live { opacity: 1; visibility: visible; }
-/* 角色浮出水面（hero.js 的 hideLoader）就淡出收工，别继续在角色脸上加光。 */
-.hero-ring-video.is-off { opacity: 0; visibility: hidden; }
-@media (max-width: 560px) {
-  /* 窄屏素材格缩到 176（上一条媒体查询），底下的两行字没变，
-     所以整列矮了 68，重心往下挪 2 —— 素材格顶边改成往上抬 139。 */
-  .hero-ring-video { width: 176px; height: 176px; margin: -139px 0 0 -88px; }
-}
-.hero-loader-core { position: absolute; left: 50%; top: 50%; width: 26px; height: 26px;
-  margin: -13px 0 0 -13px; border-radius: 50%;
-  background: radial-gradient(circle at 38% 34%, #ffffff 0%, #cdf2ff 46%, #7fd4f0 100%);
-  box-shadow: 0 0 26px rgba(214,252,255,.85), 0 0 60px rgba(150,228,252,.55);
-  animation: heroLoaderCore 2.6s ease-in-out infinite; }
-.hero-loader-ring { position: absolute; inset: 0; border-radius: 50%;
-  border: 1.5px solid rgba(255,255,255,.9);
-  animation: heroLoaderRipple 2.6s cubic-bezier(.22,.61,.36,1) infinite; }
-.hero-loader-ring:nth-child(2) { animation-delay: .87s; }
-.hero-loader-ring:nth-child(3) { animation-delay: 1.74s; }
-@keyframes heroLoaderRipple {
-  0%   { transform: scale(.18); opacity: 0; }
-  12%  { opacity: .85; }
-  70%  { opacity: .26; }
-  100% { transform: scale(1); opacity: 0; }
-}
-@keyframes heroLoaderCore {
-  0%, 100% { transform: scale(1); opacity: .92; }
-  50%      { transform: scale(1.16); opacity: 1; }
-}
-.hero-loader-title { position: relative; z-index: 1; margin: 0; font-size: 22px; font-weight: 600; letter-spacing: .3em;
-  text-indent: .3em; color: #fff; text-shadow: 0 2px 14px rgba(16,84,120,.45); }
-.hero-loader-sub { position: relative; z-index: 1; margin: 10px 0 0; font-size: 13px; letter-spacing: .12em;
-  color: rgba(255,255,255,.9); text-shadow: 0 2px 12px rgba(16,84,120,.4); }
+/* 底下那两行字：背景是黑底加一圈发光，字得比原来更「轻」一点才不抢戏，
+   所以压低了亮度和字号；投影也从蓝色换成黑色（蓝色投在黑底上是脏的）。 */
+.hero-loader-title { position: relative; z-index: 2; margin: 0; font-size: 19px; font-weight: 600;
+  letter-spacing: .3em; text-indent: .3em; color: rgba(255,255,255,.92);
+  text-shadow: 0 2px 18px rgba(0,0,0,.75); }
+.hero-loader-sub { position: relative; z-index: 2; margin: 10px 0 0; font-size: 12px; letter-spacing: .12em;
+  color: rgba(255,255,255,.58); text-shadow: 0 2px 14px rgba(0,0,0,.75); }
 
 .hero-panels { position: absolute; inset: 0; pointer-events: none; }
 .hero-panel { position: absolute; opacity: 0; will-change: transform, opacity; }
@@ -969,20 +925,6 @@ html.hb-dark .hero-flow {
     radial-gradient(40% 32% at 80% 70%, rgba(72, 172, 216, .24) 0%, rgba(72, 172, 216, 0) 72%),
     radial-gradient(66% 50% at 50% 112%, rgba(3, 16, 28, .58) 0%, rgba(3, 16, 28, 0) 72%),
     linear-gradient(180deg, #1b5573 0%, #164a66 40%, #0f3a52 72%, #0b2c40 100%); }
-
-/* 遮罩底色的白天版：亮带位置跟黑天版完全一致（17.8% / 82%），只是整片海亮一档。
-   它只负责撑到「海画出第一帧」为止，两个版本还是得一起改。 */
-html:not(.hb-dark) .hero-loader-veil {
-  background: linear-gradient(180deg,
-    #55bae0 1.8%, #5dc0e6 8.9%, #6ed1f6 17.8%, #62c3e8 28.9%,
-    #4cacd3 40%, #47a6cd 50%, #4facd3 60%, #64c0e6 71.1%,
-    #59b2d9 82.2%, #3f98c0 92.2%, #348cb6 98.4%); }
-/* 默认（黑天）那串色标写在 .hero-loader-veil 本体上；这里只处理白天要盖掉它的情况。
-   注意顺序：这条规则的选择器权重比 .hero-loader-veil 高，所以能覆盖。 */
-html.hb-dark .hero-loader-core {
-  background: radial-gradient(circle at 38% 34%, #ffffff 0%, #a9dcf2 46%, #4f9fc4 100%);
-  box-shadow: 0 0 24px rgba(140,214,245,.7), 0 0 54px rgba(90,180,220,.45); }
-html.hb-dark .hero-loader-ring { border-color: rgba(206,238,252,.8); }
 
 /* 白卡 → 深夜蓝卡 */
 html.hb-dark .hero-tab-card { background: #0e1720;
