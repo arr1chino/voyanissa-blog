@@ -694,7 +694,9 @@ body.hero-mode { background-color: transparent !important; }
    这一块由主题页脚模板（includes/footer.pug）渲染，和「首页 / 其他页」的
    切换全靠 html.hero-mode 那一个 class —— 模板里两块内容都生成，
    靠下面这两条 display 决定露谁。这样文章页、归档页的页脚一点没动。
-   照片在 source/img/footer-pano.jpg（阳朔漓江全景，从中间裁的）。
+   照片在 source/img/footer-ddd.jpg：桌面那张 dddjpg.jpg（竖幅，水下仰视）
+   逆时针转成横的，再从里面裁一条 2:1 的带子（2026-09-27 r113 换的，
+   原来是阳朔漓江那张 footer-pano.jpg）。
 
    版式：照片从顶上 110px 那条线往下铺满整条尾页，所有文字都压在照片上
    （原来文字浮在照片上面那条蓝带子里，等于照片只当了背景板）。
@@ -741,8 +743,8 @@ html.hero-mode #footer { margin-top: -15px !important; }
    但那正是「一坨糊」的来源。现在是硬边：海水一条、照片一条，切口是干净的。
    文字全部压在照片上，所以照片整体压暗一点点（见下面的 ::after）。 */
 .kelo-bg { position: absolute; left: 0; right: 0; bottom: 0; top: 110px; z-index: 0;
-  background-image: url('/img/footer-pano.jpg');
-  background-size: cover; background-position: center 42%; background-repeat: no-repeat; }
+  background-image: url('/img/footer-ddd.jpg');
+  background-size: cover; background-position: center 34%; background-repeat: no-repeat; }
 /* 照片上面那层「压暗」：不是滤镜（滤镜会连饱和度一起吃进去），
    只盖一层深海水色。深浅是按「哪里要放字」排的：
    顶上 0~15% 是字最密的一带（字标 / 简介 / 三列链接都在这一块），
@@ -751,9 +753,9 @@ html.hero-mode #footer { margin-top: -15px !important; }
    最底下一档回一点点，把字标和水面压住。
    这不是深色版那层 60% 黑罩 —— 整张照片仍然是亮的、看得清的。 */
 .kelo-bg::after { content: ''; position: absolute; inset: 0;
-  background: linear-gradient(180deg, rgba(20, 92, 130, .62) 0%, rgba(18, 84, 122, .55) 12%,
-    rgba(12, 66, 100, .40) 24%, rgba(8, 48, 72, .20) 40%, rgba(6, 38, 58, .13) 62%,
-    rgba(4, 28, 44, .28) 100%); }
+  background: linear-gradient(180deg, rgba(14, 68, 100, .58) 0%, rgba(12, 62, 92, .46) 13%,
+    rgba(9, 50, 76, .30) 27%, rgba(6, 36, 56, .15) 45%, rgba(4, 26, 42, .10) 64%,
+    rgba(3, 20, 34, .26) 100%); }
 .kelo-inner { position: relative; z-index: 10; }
 /* 浅色字在照片上最容易丢的地方是「亮天」那一块（白云、水面反光）。
    这里给字垫一圈很淡的深色影子，亮底深底都兜得住；照片本身一个像素没动。 */
@@ -1575,3 +1577,122 @@ html.hb-chat-page #page { background-color: transparent !important; box-shadow: 
 @media (prefers-reduced-motion: reduce) {
   .hb-toast { transform: translate(-50%, 0); transition: opacity .2s ease; }
 }
+
+/* ============================================================
+   2026-09-27 r113 三张新照片
+
+   ① 首页收尾页换图 —— 就是上面 692 行那一块，这里不重复写，只换了素材。
+   ② 文章页顶端：aaa8.jpg 逆时针转横，取眼睛横着那一带。
+   ③ 聊天页（/chat/）：4K 电脑壁纸铺满整页，整页模糊 + 聊天窗磨砂玻璃。
+   ④ 子页（文章页 / 日历页…）的页脚也铺同一张 dddjpg，
+      和首页收尾页是同一张图 —— 整站从上到下就这一组水色。
+
+   素材都是桌面那三张原图现裁的，落在 source/img/：
+     dddjpg.jpg   1440x2534 竖 → 逆时针转横 2534x1440 → 裁 2534x1267
+                  → footer-ddd.jpg 2400x1200（首页收尾页 + 子页页脚）
+     aaa8.jpg     1440x2540 竖 → 逆时针转横 2540x1440 → 裁 2540x706
+                  → post-top.jpg   2400x667（文章页顶端）
+     电脑壁纸 4K  3840x2160 横 → 压到 1920x1080 → chat-bg.jpg（聊天页）
+   要换图：把同名文件覆盖掉就行，下面这些规则不用动。
+   ============================================================ */
+
+/* ---- ② 文章页顶端 ----
+   主题 _layout/head.styl 给 #page-header 铺的是 $light-blue 纯色，
+   而且 background-size: cover / background-position 都已经写好了，
+   这里只把图叠上去。
+
+   ::before 那层是主题 mask.header 的黑色罩子（var(--mark-bg)，黑天 60%），
+   整块糊黑会把眼睛压死，所以换成我们自己的两层：
+   上下一条托住底部的标题和 meta，左边一条托住左上角那枚「文章名 / 返回首页」。
+   整套属性得自己写全（content / position / inset）—— 不能只改 background：
+   主题那条规则带了 :not(.not-top-img)，往下滑之后 #page-header 一被加上
+   .not-top-img，主题那条就整个失效，只剩我们这条在管。 */
+html.hb-ocean #page-header.post-bg {
+  background-image: url('/img/post-top.jpg');
+  background-position: center 46%;
+  background-color: #0d3247;
+}
+html.hb-ocean #page-header.post-bg::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background-color: transparent;
+  background-image:
+    linear-gradient(180deg, rgba(4, 24, 38, .50) 0%, rgba(4, 24, 38, .06) 30%,
+      rgba(4, 24, 38, .10) 62%, rgba(4, 24, 38, .62) 100%),
+    linear-gradient(90deg, rgba(4, 24, 38, .46) 0%, rgba(4, 24, 38, .12) 34%,
+      rgba(4, 24, 38, 0) 62%);
+}
+
+/* ---- ③ 聊天页：整页一张壁纸，糊掉当底 ----
+   这一页没有 #web_bg，也没有首页那层 .hero-flow，底色本来是 html.hb-ocean
+   那条纯色（深色模式下是 #0b2c40）。所以可以直接在 html 上挂一层 fixed 的
+   ::before：z-index:-2 让它落在页面所有内容下面，但仍在 html 自己那层底色之上。
+   inset 取负值 + scale 是给 blur 留边 —— 不然模糊会把四条边吸出一圈透明的软边。
+
+   上面那层渐变（--hbc-veil）和照片一起被 blur 吃进去，等于「先给照片垫一层
+   水色再模糊」，白天是浅水、黑天是深海。
+
+   还有一层得先关掉：hero.js 在每一页都会插一个 .hero-flow（那层 fixed 的
+   流光海洋蓝，z-index:-1），它压在这一页的照片上面 —— 不关的话只能看见那片
+   蓝，照片根本露不出来（第一次做就是这么翻车的）。这一页的背景换成照片，
+   那片蓝就不要了。 */
+html.hb-chat-page .hero-flow { display: none !important; }
+html.hb-chat-page {
+  --hbc-veil: linear-gradient(180deg, rgba(8, 40, 62, .38) 0%, rgba(5, 22, 36, .54) 100%);
+}
+html.hb-chat-page:not(.hb-dark) {
+  --hbc-veil: linear-gradient(180deg, rgba(240, 250, 255, .16) 0%, rgba(198, 230, 247, .28) 100%);
+}
+html.hb-chat-page::before {
+  content: '';
+  position: fixed;
+  inset: -8vmax;
+  z-index: -2;
+  pointer-events: none;
+  background-image: var(--hbc-veil), url('/img/chat-bg.jpg');
+  background-size: cover, cover;
+  background-position: center 22%, center 22%;
+  background-repeat: no-repeat, no-repeat;
+  filter: blur(13px) saturate(114%);
+  transform: scale(1.05);
+}
+
+/* 聊天窗本身改成磨砂玻璃：底色透出来，背后那层壁纸在窗子范围里再过一遍模糊。
+   原来是不透明的渐变（白天近白、黑天近黑），不透的话 backdrop-filter 白写。 */
+.hbc-shell {
+  -webkit-backdrop-filter: blur(20px) saturate(145%);
+  backdrop-filter: blur(20px) saturate(145%);
+  background: linear-gradient(180deg, rgba(255, 255, 255, .78) 0%, rgba(238, 247, 253, .66) 100%);
+  border-color: rgba(255, 255, 255, .72);
+}
+html.hb-dark .hbc-shell {
+  background: linear-gradient(180deg, rgba(13, 40, 58, .64) 0%, rgba(9, 28, 43, .72) 100%);
+  border-color: rgba(127, 210, 245, .26);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, .42);
+}
+/* 窗子里的输入框原来是不透明白（黑天是近黑），压在磨砂玻璃上会像贴了张补丁 */
+.hbc-input { background: rgba(255, 255, 255, .74); }
+html.hb-dark .hbc-input { background: rgba(3, 17, 28, .46); }
+
+/* ---- ④ 子页页脚：铺同一张 dddjpg ----
+   首页那条尾巴是 .kelo-footer，子页走的是主题自己的 .footer-classic。
+   这里直接铺在 #footer 上（而不是 .footer-classic 里），图才能整条出血 ——
+   .footer-classic 只是里面的内容块，左右那点留白不归它管。
+   主题给 #footer 的底色是 $light-blue，另外 mask.footer 那层黑罩也得撤掉，
+   不然照片上会再压一层 rgba(0,0,0,.6)（黑天）。
+   版权那两行是浅灰字，正好压在深水色上，不用改字色。 */
+html.hb-ocean:not(.hero-mode) #footer {
+  background-color: #0b3149;
+  background-image:
+    linear-gradient(180deg, rgba(6, 34, 52, .44) 0%, rgba(4, 22, 36, .72) 100%),
+    url('/img/footer-ddd.jpg');
+  background-size: cover, cover;
+  background-position: center top, center 40%;
+  background-repeat: no-repeat, no-repeat;
+  border-top: 1px solid rgba(150, 220, 250, .16);
+}
+html.hb-ocean:not(.hero-mode) #footer::before { background-color: transparent; }
+html.hb-ocean:not(.hero-mode) #footer .footer-other { background-color: transparent; }
