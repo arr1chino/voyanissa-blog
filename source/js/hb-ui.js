@@ -117,11 +117,76 @@
     window.addEventListener('blur', reset);
   }
 
+  /* ===== 页脚平台方块里的「点一下复制」 =====
+     抖音 / B站 / QQ / GitHub 是真链接，点了直接跳走，用不到下面这套。
+     微信压根没有「网页跳微信」这种东西，原神那一行也只是我的 UID，
+     两个都跳不了 —— 所以给它们改成：点一下把号码复制到剪贴板，
+     再从屏幕下方飘一条小提示，告诉访客「复制好了，去微信搜这个就行」。
+
+     用法：给任意元素挂 data-hb-copy="要复制的内容"，
+     想自定义提示语就再加 data-hb-copy-tip="……"。
+     只挂 data-hb-copy、没有 href 的元素也能点。 */
+  function showToast(msg) {
+    var box = document.getElementById('hb-toast');
+    if (!box) {
+      box = document.createElement('div');
+      box.id = 'hb-toast';
+      box.className = 'hb-toast';
+      box.setAttribute('role', 'status');
+      box.setAttribute('aria-live', 'polite');
+      document.body.appendChild(box);
+    }
+    box.textContent = msg;
+    // 先摘掉再戴上，连续点两次才会重新播一遍淡入，不会僵在那里
+    box.classList.remove('is-on');
+    void box.offsetWidth;
+    box.classList.add('is-on');
+    clearTimeout(showToast.timer);
+    showToast.timer = setTimeout(function () { box.classList.remove('is-on'); }, 2800);
+  }
+
+  function copyText(text) {
+    /* 老浏览器、或者 http 页面里没有 navigator.clipboard，
+       就拿一个看不见的输入框选中再 execCommand 兜一下。 */
+    function fallback() {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.top = '-1000px';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); } catch (e) { /* 复制不了就算了，提示照样弹 */ }
+      document.body.removeChild(ta);
+    }
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text).catch(fallback);
+    }
+    fallback();
+    return Promise.resolve();
+  }
+
+  function bindCopyRows() {
+    document.addEventListener('click', function (e) {
+      var el = e.target && e.target.closest ? e.target.closest('[data-hb-copy]') : null;
+      if (!el) return;
+      var text = el.getAttribute('data-hb-copy');
+      if (!text) return;
+      // 这类行的 href 写的是 '#'，不拦一下的话点完会「嗖」地跳回页首
+      var href = el.getAttribute('href');
+      if (!href || href === '#') e.preventDefault();
+      copyText(text).then(function () {
+        showToast(el.getAttribute('data-hb-copy-tip') || ('已复制：' + text));
+      });
+    });
+  }
+
   function boot() {
     paintTheme(readTheme());
     buildOcean();
     buildButtons();
     bindScrollbar();
+    bindCopyRows();
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);

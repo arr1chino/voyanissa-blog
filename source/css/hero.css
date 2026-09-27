@@ -835,9 +835,14 @@ html.hero-mode #footer { margin-top: -15px !important; }
    压在哪块底色上都一样清楚，所以这里只动字。 */
 #footer .kelo-social-name { font-size: 14px; letter-spacing: .02em; color: #eef9ff;
   transition: color .3s ease; }
+/* 平台名后面跟着的账号名（大碗螺蛳粉 / 十七7页序 …）。
+   比平台名淡一档，字也小一点 —— 一眼能分出「这是哪个平台」和「这是我的号」。 */
+#footer .kelo-social-handle { font-size: 13px; color: rgba(212, 238, 255, .74);
+  transition: color .3s ease; }
 #footer .kelo-social-item:hover .kelo-icon { background: #fff;
   border-color: rgba(255, 255, 255, .85); transform: translateX(2px); }
 #footer .kelo-social-item:hover .kelo-social-name { color: #fff; }
+#footer .kelo-social-item:hover .kelo-social-handle { color: rgba(255, 255, 255, .9); }
 .kelo-icon svg { display: block; width: 17px; height: 17px; }
 
 .kelo-navs { width: 60%; display: flex; gap: 80px; justify-content: flex-end; }
@@ -1544,4 +1549,29 @@ html.hb-chat-page #page { background-color: transparent !important; box-shadow: 
   transform: none !important;
   margin-left: 14px;
   vertical-align: middle;
+}
+
+/* ============================================================
+   页脚「点一下复制」的小提示条
+
+   微信没有「网页跳微信」这种东西，原神那一行也只是我的 UID，
+   两行都跳不了 —— 改成点一下把号码复制走，这里飘一条提示告诉访客复制好了。
+   深浅两种模式下都用同一条：底色是深海蓝，压在白卡片和流光蓝上都看得清。
+   ============================================================ */
+.hb-toast {
+  position: fixed; left: 50%; bottom: 42px; z-index: 9999;
+  max-width: min(88vw, 420px);
+  padding: 11px 20px; border-radius: 999px;
+  background: rgba(8, 34, 52, .94);
+  border: 1px solid rgba(126, 205, 245, .32);
+  color: #eaf7ff; font-size: 13.5px; line-height: 1.6; text-align: center;
+  box-shadow: 0 12px 34px rgba(2, 22, 36, .45);
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  opacity: 0; pointer-events: none; transform: translate(-50%, 14px);
+  transition: opacity .32s ease, transform .32s cubic-bezier(.22, .68, .35, 1);
+}
+.hb-toast.is-on { opacity: 1; transform: translate(-50%, 0); }
+
+@media (prefers-reduced-motion: reduce) {
+  .hb-toast { transform: translate(-50%, 0); transition: opacity .2s ease; }
 }
