@@ -181,12 +181,84 @@
     });
   }
 
+  /* 文章页左上角那块「文章名 ⇄ 返回首页」的翻转（样式在 css/hero.css）。
+     只靠 CSS 的 :hover 在真机上会有几率不翻：
+     ① 指针擦着文字上下边缘走的时候，悬停判定容易掉，掉了动画就往回弹；
+     ② 首屏如果鼠标本来就停在那个位置，遮罩撤走时鼠标没动，
+        浏览器不一定重算悬停，停在那儿就是不翻。
+     这里干脆自己按位置判：记住指针停在哪，拿标题那块**不动的**矩形比一下，
+     命中就挂 is-flip（和 :hover 一个效果），离开就摘掉。 */
+  function bindTitleFlip() {
+    var link = document.querySelector('#blog-info > .nav-page-title');
+    if (!link || link.getAttribute('data-hb-flip') === '1') return;
+    link.setAttribute('data-hb-flip', '1');
+
+    var px = null;
+    var py = null;
+    var ticking = false;
+
+    function inside() {
+      if (px === null) return null;
+      var r = link.getBoundingClientRect();
+      if (!r.width || !r.height) return null;
+      /* 横向各留 6px、纵向各留 14px 的富余：手停在字边上、停得略高略低都算停上了，
+         比浏览器自己那个正好贴着文字的判定框宽容一点。 */
+      return px >= r.left - 6 && px <= r.right + 6 && py >= r.top - 14 && py <= r.bottom + 14;
+    }
+
+    function sync() {
+      ticking = false;
+      var on = inside();
+      if (on === null) return;
+      link.classList.toggle('is-flip', on);
+    }
+
+    function queue() {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(sync);
+    }
+
+    link.addEventListener('mouseenter', function () { link.classList.add('is-flip'); });
+    link.addEventListener('focus', function () { link.classList.add('is-flip'); });
+    link.addEventListener('blur', function () { link.classList.remove('is-flip'); });
+
+    document.addEventListener('pointermove', function (e) {
+      if (e.pointerType === 'touch') return;
+      px = e.clientX;
+      py = e.clientY;
+      queue();
+    }, { passive: true });
+
+    /* 指针整个离开窗口、或者切走标签页之后就收不到移动了，得自己收尾，
+       不然回来时那一下会一直翻着。 */
+    document.addEventListener('mouseleave', function () {
+      px = null;
+      link.classList.remove('is-flip');
+    });
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden) { px = null; link.classList.remove('is-flip'); }
+    });
+
+    /* 「鼠标没动、页面却动了」的几秒（加载遮罩撤走、顶栏滑进来、窗口改大小）
+       再主动补判几次，用的还是刚才记下的那个指针位置。 */
+    window.addEventListener('load', queue);
+    window.addEventListener('resize', queue);
+    window.addEventListener('scroll', queue, { passive: true });
+    var rounds = 0;
+    var timer = setInterval(function () {
+      sync();
+      if (++rounds >= 10) clearInterval(timer);
+    }, 400);
+  }
+
   function boot() {
     paintTheme(readTheme());
     buildOcean();
     buildButtons();
     bindScrollbar();
     bindCopyRows();
+    bindTitleFlip();
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);

@@ -1475,29 +1475,49 @@ html.hb-chat-page #page { background-color: transparent !important; box-shadow: 
    现在文章页统一成一副：平时就是文章名，鼠标停上去整块绕横轴翻半圈，
    背面那颗「← 返回首页」顺势翻到正面；鼠标移开再翻回去。
    站点名整个不再出现。.post-bg 这个 class 只有文章页的 #page-header 会带上，
-   所以首页、日历页、聊天页的左上角不受影响。 */
+   所以首页、日历页、聊天页的左上角不受影响。
+
+   翻的是里面那层 .hb-flip（见 nav.pug），外面这层 <a> 自己一动不动。
+   为什么非要多包一层：翻转会把「用来判悬停的那个框」一起转走 ——
+   转到一半时框缩成一条线，鼠标只要没压在正中间就会 hover 掉、
+   动画往回弹，再进去再翻……表现出来就是「有时候翻、有时候不翻」。
+   判定框不动的那个 <a> 就不会有这毛病。 */
 #page-header.post-bg #blog-info > .nav-site-title { display: none !important; }
 
-/* 翻转要有人看着才有立体感：透视放在外层，转动放在标题那一条上。
+/* 翻转要有人看着才有立体感：透视给到标题这一层（转动那层的直接父级），
    透视只影响被 transform 的元素（这里只有下面那个翻转），
    没动的文字照旧是平的。 */
-#page-header.post-bg #blog-info { perspective: 620px; }
-
 #page-header.post-bg #blog-info > .nav-page-title {
   display: inline-block !important;
   /* 主题在 .nav-page-title 上写了 overflow: hidden（原来的上下交替动画要在框里藏字），
      翻转时会把翻到背面的那一面裁掉，这里必须放开。 */
   overflow: visible !important;
+  perspective: 620px;
+}
+
+/* 真正翻的那一层。它这会儿是 .nav-page-title 的唯一子元素，
+   主题那套「第一个 span 沉下去、第二个 span 浮上来」的规则会落在它身上，
+   所以 position / opacity / transform 都要 !important 按住。 */
+#page-header.post-bg #blog-info > .nav-page-title > .hb-flip {
+  display: block !important;
+  position: static !important;
+  opacity: 1 !important;
+  transform: none;
   transform-style: preserve-3d;
   transition: transform .52s cubic-bezier(.36, .72, .26, 1);
   will-change: transform;
 }
-#page-header.post-bg #blog-info > .nav-page-title:hover { transform: rotateX(180deg); }
+/* :hover 是没脚本时的退路；.is-flip 是 hb-ui.js 按鼠标位置自己判的，
+   两条路谁先到算谁（见 source/js/hb-ui.js 的 bindTitleFlip）。 */
+#page-header.post-bg #blog-info > .nav-page-title:hover > .hb-flip,
+#page-header.post-bg #blog-info > .nav-page-title.is-flip > .hb-flip {
+  transform: rotateX(180deg) !important;
+}
 
 /* 正面：文章名。它照旧待在文档流里 —— 顶栏那块宽度就是它撑出来的，
    所以翻转前后位置不跳。 */
-#page-header.post-bg .nav-page-title > :first-child,
-#page-header.post-bg .nav-page-title:hover > :first-child {
+#page-header.post-bg .hb-flip > :first-child {
+  display: inline-block !important;
   opacity: 1 !important;
   transform: rotateX(0deg) !important;
   -webkit-backface-visibility: hidden;
@@ -1508,8 +1528,8 @@ html.hb-chat-page #page { background-color: transparent !important; box-shadow: 
 /* 背面：「← 返回首页」。自己先翻半圈，等外层转过去正好正着朝观众。
    绝对定位是照主题的老办法（它本来就把第二个 span 摘出行外），
    位置摆回标题左边、垂直居中，字比标题略长也不会被裁（顶栏那一条很宽）。 */
-#page-header.post-bg .nav-page-title > :last-child,
-#page-header.post-bg .nav-page-title:hover > :last-child {
+#page-header.post-bg .hb-flip > :last-child {
+  display: inline-block !important;
   position: absolute !important;
   top: 50% !important;
   left: 0 !important;
@@ -1524,8 +1544,11 @@ html.hb-chat-page #page { background-color: transparent !important; box-shadow: 
 
 /* 关了动效的就别翻了：直接停在「文章名」这一面，照样点得回首页。 */
 @media (prefers-reduced-motion: reduce) {
-  #page-header.post-bg #blog-info > .nav-page-title { transition: none; }
-  #page-header.post-bg #blog-info > .nav-page-title:hover { transform: none; }
+  #page-header.post-bg #blog-info > .nav-page-title > .hb-flip { transition: none; }
+  #page-header.post-bg #blog-info > .nav-page-title:hover > .hb-flip,
+  #page-header.post-bg #blog-info > .nav-page-title.is-flip > .hb-flip {
+    transform: none !important;
+  }
 }
 
 /* ============================================================
