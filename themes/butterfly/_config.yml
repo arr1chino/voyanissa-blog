@@ -58,19 +58,19 @@ favicon: /img/favicon.png
 
 avatar:
   img: /img/avatar.png
-  effect: true
+  effect: false
   rounded: true
 # Disable all banner images
 disable_top_img: false
 
 # If the banner of page not setting, it will show the default_top_img
-default_top_img: /img/top.png
+default_top_img:
 
 # The banner image of index page
-index_img: /img/top.png
+index_img:
 
 # The banner image of archive page
-archive_img: /img/top.png
+archive_img:
 
 # Note: tag page, not tags page
 tag_img:
@@ -293,7 +293,7 @@ aside:
       link: https://github.com/xxxxxx
   card_announcement:
     enable: true
-    content: This is my Blog
+    content: 持续更新中
   card_recent_post:
     enable: true
     # If set 0 will show all
@@ -521,7 +521,7 @@ share:
   # Share.js
   # https://github.com/overtrue/share.js
   sharejs:
-    sites: facebook,x,wechat,weibo,qq
+    sites: x,wechat,weibo,qq
 
   # AddToAny
   # https://www.addtoany.com/

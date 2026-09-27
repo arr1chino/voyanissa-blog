@@ -221,26 +221,6 @@ block content
                   //- 右下角那枚圆钮：只在鼠标停到卡上时滑出来（纯装饰，点它等于点整张卡）
                   span.hb-post-arrow(aria-hidden='true')
                     i.fas.fa-arrow-right
-            //- 文章归档：全部文章一行一条的索引。
-            //- 有它垫在下面，中列不会在最后一张卡下面空一大片；
-            //- 以后文章越写越多，这一列（和白卡）也就自然越长。
-            section.hb-card.hb-archive-card.reveal
-              h3.hb-card-title 文章归档
-              ul.hb-archive-list
-                each post in posts
-                  li.hb-archive-item
-                    a.hb-archive-link(href=url_for(post.path))
-                      span.hb-archive-title= post.title
-                      span.hb-archive-date= date(post.date, 'YYYY-MM-DD')
-              p.hb-archive-foot 共 #{posts.length} 篇 · 还在慢慢攒
-            //- 关于这里：中列最后垫一张小卡。文章还少的时候，
-            //- 归档下面是好几百像素的空白，白卡看着像没加载完；
-            //- 这张卡正好把那片空白填实，也不用编内容。
-            section.hb-card.hb-about-card.reveal
-              h3.hb-card-title 关于这里
-              p.hb-about-lead 上半页是沃雅妮莎的三维形象，滚动换视角；下半页放文章和记录。
-              p.hb-about-line 文章还少，在慢慢攒。摄影、建模、社团的事都会往这儿放。
-              p.hb-about-line 想随便聊两句，左边那张「和沃聊天」点进去就行。
           aside.hero-blog-col.hero-blog-col--side
             //- 定位天气：问浏览器要位置 → 当地实况（脚本在 /js/hb-weather.js）
             .hb-card.hb-weather-card#hb-weather-card
