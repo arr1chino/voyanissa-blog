@@ -1518,3 +1518,30 @@ html.hb-dark .hbc-foot { color: #6f8496; }
    html 上的 hb-chat-page 是 /chat/ 在 <head> 里自己打的（见主题 _config.yml 的 inject）。 */
 html.hb-chat-page #footer { display: none !important; }
 html.hb-chat-page #page { background-color: transparent !important; box-shadow: none !important; }
+
+/* ---- 文章页左上角：只留「文章名 + 返回首页」 ----
+   主题原本给左上角留了两副面孔（见主题 _layout/head.styl）：
+   刚进页面时显示站点名「沃雅妮莎的个人空间」，而且它是个指回首页的链接；
+   往下滑、顶栏收成固定条之后才换成文章名，此时「返回首页」还藏在悬停动画里
+   ——.nav-page-title 里的两个 span 是叠在一起做上下交替的，
+   一个平时 opacity:0、绝对定位在下面，鼠标停上去才浮出来。
+   现在文章页统一成一副：文章名和「返回首页」一直并排，站点名整个不再出现。
+   .post-bg 这个 class 只有文章页的 #page-header 会带上，
+   所以首页、日历页、聊天页的左上角不受影响。 */
+#page-header.post-bg #blog-info > .nav-site-title { display: none !important; }
+#page-header.post-bg #blog-info > .nav-page-title { display: inline !important; }
+
+#page-header.post-bg .nav-page-title > :first-child,
+#page-header.post-bg .nav-page-title:hover > :first-child {
+  opacity: 1 !important;
+  transform: none !important;
+}
+
+#page-header.post-bg .nav-page-title > :last-child,
+#page-header.post-bg .nav-page-title:hover > :last-child {
+  position: static !important;
+  opacity: 1 !important;
+  transform: none !important;
+  margin-left: 14px;
+  vertical-align: middle;
+}
