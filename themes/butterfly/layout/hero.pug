@@ -11,6 +11,15 @@ block content
       //- 兜底底色：只在这条视频播不出来的时候才看得见（断网 / 禁自动播放）。
       //- 视频是纯黑的，铺满之后就把它盖住了，平时根本不露面。
       .hero-loader-veil
+      //- r124：把「第一帧」从 video 的 poster 属性挪成一张真 <img>。
+      //- poster 属性画出来的东西浏览器不算「最大内容」，所以整页的 LCP
+      //- 一直被卡在遮罩淡出之后才出现的文字上（实测 3.3 秒）。换成 <img>
+      //- 之后它自己是首屏最大的图，从第一帧起就算数，LCP 直接提前到图片加载完。
+      //- 画面和 poster 一模一样（同一张 loader-poster.webp），下面那条 video
+      //- 一解出真帧就把它盖住，肉眼看不出区别。
+      img.hero-loader-poster(
+        src='/img/loader-poster.webp' alt='' aria-hidden='true'
+        fetchpriority='high' decoding='async')
       //- 加载页的主角：B 站素材里那圈在动的水环。原片 44 秒、右上角带着原 UP 主的水印，
       //- 这里把水印裁掉了，取中间 10 秒「正放 + 倒放」拼成 20 秒无缝循环，压成
       //- /img/loader-ring.mp4（960×960、约 1.1MB、无音轨）。黑的地方不抠图 ——
@@ -22,7 +31,7 @@ block content
       //- 视频是独立解码的，不吃主线程，铺上去之后从第一帧起就是素材本身在动。
       video.hero-loader-video(
         autoplay='' muted='' loop='' playsinline='' preload='auto'
-        poster='/img/loader-poster.jpg' aria-hidden='true' tabindex='-1')
+        poster='/img/loader-poster.webp' aria-hidden='true' tabindex='-1')
         source(src='/img/loader-ring.mp4' type='video/mp4')
       p.hero-loader-title 沃雅妮莎
       p.hero-loader-sub#hero-loader-sub 正在浮出水面…
@@ -52,7 +61,7 @@ block content
           .hero-panel(data-index='1')
             .hero-panel-inner
               .hero-kicker 01 / 你好
-              h3 关于这个形象
+              h2 关于这个形象
               p
                 | 这个界面用3D建模设计
                 br
@@ -60,7 +69,7 @@ block content
           .hero-panel(data-index='2')
             .hero-panel-inner
               .hero-kicker 02 / 我在做什么
-              h3 管院大一·狂暴学习中
+              h2 管院大一·狂暴学习中
               p 筹备摄影策划，准备机器人比赛，coding社团任务中。。
               .hero-tags
                 span 二次元摄影
@@ -70,12 +79,12 @@ block content
           .hero-panel(data-index='3')
             .hero-panel-inner
               .hero-kicker 03 / 转过身
-              h3 我的爱好超级多，待开发…
+              h2 我的爱好超级多，待开发…
               p 来和我交朋友
           .hero-panel(data-index='4')
             .hero-panel-inner
               .hero-kicker 04 / 近一点
-              h3 关于这个网站
+              h2 关于这个网站
               p
                 | coding by deepseek v4.1 flash
                 br
@@ -83,7 +92,7 @@ block content
           .hero-panel(data-index='5')
             .hero-panel-inner
               .hero-kicker 05 / 继续向下
-              h3 下面是博客
+              h2 下面是博客
               p 文章、作品和联系方式都排在后面。
         .hero-hint 向下滚动
         .hero-credit 模型提供 miHoYo · 改造 观海子 · 仅作学习展示

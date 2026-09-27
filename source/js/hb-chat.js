@@ -43,8 +43,8 @@
     '<div class="hbc-shell">' +
       '<div class="hbc-head">' +
         '<span class="hbc-ava">' +
-          '<img src="/img/voyanissa-avatar.png" ' +
-            'srcset="/img/voyanissa-avatar.png 1x, /img/voyanissa-avatar@2x.png 2x" ' +
+          '<img src="/img/voyanissa-avatar.webp" ' +
+            'srcset="/img/voyanissa-avatar.webp 1x, /img/voyanissa-avatar@2x.webp 2x" ' +
             'alt="" width="42" height="42" decoding="async">' +
           '<span class="hbc-dot" aria-hidden="true"></span>' +
         '</span>' +

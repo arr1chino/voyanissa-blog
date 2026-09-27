@@ -57,7 +57,9 @@ social:
 favicon: /img/favicon.png
 
 avatar:
-  img: /img/avatar.png
+  # r121 上线瘦身：原来是 448×448 的 PNG（55KB），实际只显示 80~110px。
+  # 换成 320×320 的 WebP（18KB），肉眼一样、少下 36KB。
+  img: /img/avatar.webp
   effect: false
   rounded: true
 # Disable all banner images
@@ -290,7 +292,7 @@ aside:
       enable: true
       icon: fab fa-github
       text: Follow Me
-      link: https://github.com/xxxxxx
+      link: https://github.com/arr1chino
   card_announcement:
     enable: true
     content: 持续更新中
@@ -1054,10 +1056,13 @@ Open_Graph_meta:
 # Structured Data
 # https://developers.google.com/search/docs/guides/intro-structured-data
 structured_data:
-  enable: false
+  # 打开：文章页喂给搜索引擎 BlogPosting，首页喂 WebSite（站点名、别名、域名）。
+  # 关掉的话整块不输出 —— 以前这里是 false 但模板没读它，结果在非文章页留了
+  # 一堆空的 application/ld+json（无效）。现在开关是真生效的。
+  enable: true
   # Alternate name for the site, used in structured data
   # Format: ['name1', 'name2']
-  alternate_name:
+  alternate_name: ['大碗螺蛳粉']
 
 # Add the vendor prefixes to ensure compatibility
 css_prefix: true
@@ -1072,15 +1077,23 @@ inject:
     # 黑夜模式要在页面画出第一帧之前就定下来，否则会「先亮一下再变黑」。
     # 这一行只做一件事：默认（含从没选过的访客）就在 <html> 上先把黑夜记号打上，
     # 只有上一次显式选了白天的访客才跳过。
-    - "<script>(function(){try{if(localStorage.getItem('hb-theme')!=='light'){document.documentElement.setAttribute('data-theme','dark');document.documentElement.classList.add('hb-dark');}}catch(e){}})();</script>"
-    # 首页的 3D 模型提前开下（2.1MB）。
+    # 顺手把手机浏览器那条地址栏的颜色也一起定下来：<meta name="theme-color"> 原来
+    # 写死白色，要等页面底部的脚本跑完才变深色，手机上会先看到一截白条再变黑。
+    - "<script>(function(){try{if(localStorage.getItem('hb-theme')!=='light'){document.documentElement.setAttribute('data-theme','dark');document.documentElement.classList.add('hb-dark');var m=document.querySelector('meta[name=theme-color]');if(m)m.setAttribute('content','#071722');}}catch(e){}})();</script>"
+    # 首页那几样「第一眼就要看见」的东西，一起提前开下。
     #   hero.js 是 type="module"：浏览器要先把 three.js 那一大坨下完、解析完，
     #   才轮到它去要模型 —— 白白串了两段等待。这里在 <head> 里就把下载发出去，
     #   跟 three.js 并行跑，角色能早半秒到一秒浮出来。
     #   as="fetch" 必须配 crossorigin="anonymous"：three 内部是用 fetch 取的，
     #   两边不写成同一种请求模式的话，浏览器认不出这是同一个资源，会白下两遍。
-    #   只在首页发（其它页面根本没有 3D，没必要陪跑 2.1MB）。
-    - "<script>(function(){var p=location.pathname;if(p==='/'||p==='/index.html'){var l=document.createElement('link');l.rel='preload';l.as='fetch';l.crossOrigin='anonymous';l.href='/assets/model.glb';document.head.appendChild(l);}})();</script>"
+    #   加载页那张海报（水环的第一帧）必须抢在最前面：以前它是挂在 <video poster>
+    #   上的，浏览器把它当「次要资源」排在模型和 three.js 后头，实测 3 秒多才画出来 ——
+    #   这 3 秒里访客看的是一块纯黑加两行字。现在用 fetchpriority="high" 提到最高档，
+    #   它和首屏文字几乎同时出现。
+    #   「About Me」那行手写体（Caveat 700）同理：字体是「用到才去下」的，
+    #   等那句艺术字开始排版才发请求就太晚了，先预下。
+    #   只在首页发（其它页面根本没有 3D / 艺术字，没必要陪跑这几个 MB）。
+    - "<script>(function(){var p=location.pathname;if(p!=='/'&&p!=='/index.html')return;function L(a,o){var l=document.createElement('link');l.rel='preload';l.as=a;for(var k in o){l[k]=o[k];}document.head.appendChild(l);}L('fetch',{crossOrigin:'anonymous',href:'/assets/model.glb'});L('image',{fetchPriority:'high',href:'/img/loader-poster.webp'});L('font',{type:'font/woff2',crossOrigin:'anonymous',href:'/fonts/caveat-700.woff2'});L('font',{type:'font/woff2',crossOrigin:'anonymous',href:'/fonts/caveat-400.woff2'});})();</script>"
     # 聊天页（/chat/）要单独收拾两处（藏掉那条蓝页脚、把外面那圈卡片框去掉），
     # 这页的 body 上什么都没有、认不出是哪一页，所以在 <head> 里就往 <html> 上打个记号。
     # 放在这里（而不是那页正文里的 <script>）是因为要赶在第一帧之前打上，

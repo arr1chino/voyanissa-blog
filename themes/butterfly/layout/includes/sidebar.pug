@@ -5,13 +5,17 @@ if theme.menu
       .avatar-img.text-center
         img(src=url_for(theme.avatar.img) onerror=`this.onerror=null;this.src='${url_for(theme.error_img.flink)}'` alt="avatar")
       .site-data.text-center
-        a(href=`${url_for(config.archive_dir)}/`)
+        //- r115：/archives/、/tags/、/categories/ 这三个「总目录」页本站并没有
+        //- 生成（整站就一页，归档页是关掉的），点进去只会 404。文章列表本来
+        //- 就在首页白卡里，三块统计统一指回首页 —— 跟右侧作者卡（card_author.pug）
+        //- 保持一致。以后真加了对应页面，再把 href 换回各自的目录。
+        a(href=url_for('/'))
           .headline= _p('aside.articles')
           .length-num= site.posts.length
-        a(href=`${url_for(config.tag_dir)}/`)
+        a(href=url_for('/'))
           .headline= _p('aside.tags')
           .length-num= site.tags.length
-        a(href=`${url_for(config.category_dir)}/`)
+        a(href=url_for('/'))
           .headline= _p('aside.categories')
           .length-num= site.categories.length
 

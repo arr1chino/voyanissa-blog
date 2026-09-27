@@ -100,6 +100,12 @@ ignore:
 # Extensions
 ## Plugins: https://hexo.io/plugins/
 ## Themes: https://hexo.io/themes/
+# stylus：主题那份 index.css 是它编译出来的。
+# compress: true 让它编译时就顺手压掉注释和缩进 —— 原来发出去那份 200 多 KB
+# 是带注释的原文，而它是阻塞首屏渲染的，越小越早能画。
+# （hero.css / js 那些手写文件的压缩在 scripts/optimize.js 里，不归这里管。）
+stylus:
+  compress: true
 theme: butterfly
 
 # Deployment

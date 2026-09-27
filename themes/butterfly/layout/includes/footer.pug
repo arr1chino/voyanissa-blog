@@ -25,6 +25,21 @@
   ]
 
 //- ============================================================
+//- 一行社交平台的样子（图标方块 + 平台名 + 账号名）。
+//- 抽成 mixin 是因为下面要渲染两种外壳：能跳转的用 <a>，
+//- 只能复制的（微信 / 原神）用 <button> —— 之前它们挂着 href="#"
+//- 加 target="_blank"，万一脚本没跑起来点一下就会弹出一个空白标签页。
+//- <button> 天生能被键盘 Tab 到、回车也能触发，比假链接更规矩。
+mixin keloSocialRow(s)
+  span.kelo-icon
+    svg(viewBox='0 0 24 24', width='16', height='16', aria-hidden='true')
+      path(fill='currentColor', d=s.d)
+  span.kelo-social-name
+    = s.name
+    if s.handle
+      span.kelo-social-handle= ' · ' + s.handle
+
+//- ============================================================
 //- Kelo 风格黑色收尾页
 //- 只在首页露脸：这一整块默认 display:none，只有 html.hero-mode 时才显形
 //- （hero.pug 里那行脚本给 html/body 加的 class），下面 .footer-classic 则相反。
@@ -43,34 +58,34 @@
           span.kelo-social-label FOLLOW US:
           ul.kelo-social-list
             each s in SOCIALS
+              - const keloCopyOnly = !s.url || s.url === '#'
               li
-                a.kelo-social-item(href=s.url, target='_blank', rel='noopener',
-                  title=(s.handle ? s.name + ' · ' + s.handle : s.name),
-                  aria-label=(s.handle ? s.name + ' · ' + s.handle : s.name),
-                  data-hb-copy=s.copy, data-hb-copy-tip=s.copyTip)
-                  span.kelo-icon
-                    svg(viewBox='0 0 24 24', width='16', height='16', aria-hidden='true')
-                      path(fill='currentColor', d=s.d)
-                  span.kelo-social-name
-                    = s.name
-                    if s.handle
-                      span.kelo-social-handle= ' · ' + s.handle
+                if keloCopyOnly
+                  button.kelo-social-item(type='button',
+                    title=(s.handle ? s.name + ' · ' + s.handle : s.name),
+                    aria-label=(s.handle ? s.name + ' · ' + s.handle : s.name),
+                    data-hb-copy=s.copy, data-hb-copy-tip=s.copyTip)
+                    +keloSocialRow(s)
+                else
+                  a.kelo-social-item(href=s.url, target='_blank', rel='noopener',
+                    title=(s.handle ? s.name + ' · ' + s.handle : s.name),
+                    aria-label=(s.handle ? s.name + ' · ' + s.handle : s.name))
+                    +keloSocialRow(s)
       .kelo-navs
         .kelo-col
-          h4 站点
-          a(href='#') 首页
-          a(href='#') 关于我
-          a(href='#') 联系方式
+          h2 站点
+          a(href=url_for('/')) 首页
+          a(href=url_for('/calendar/')) 日历日程
+          a(href=url_for('/chat/')) 和沃聊天
         .kelo-col
-          h4 作品集
-          a(href='#') 三维形象
-          a(href='#') 网页设计
-          a(href='#') 摄影记录
-          a(href='#') 影像剪辑
+          h2 文章
+          each post in site.posts.sort('-date').limit(4).toArray()
+            a(href=url_for(post.path))= post.title
         .kelo-col
-          h4 条款
-          a(href='#') 隐私政策
-          a(href='#') 使用条款
+          h2 链接
+          a(href='https://bistumaker.cn/', target='_blank', rel='noopener') 创客空间
+          a(href='https://ys.mihoyo.com/', target='_blank', rel='noopener') 原神官网
+          a(href='https://github.com/arr1chino/voyanissa-blog', target='_blank', rel='noopener') 网站源码
     .kelo-legal
       span 模型提供 miHoYo · 改造 观海子 · 仅作学习展示
       span

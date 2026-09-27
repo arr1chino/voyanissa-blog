@@ -22,6 +22,10 @@ nav#nav
     if theme.menu
       != partial('includes/header/menu_item', {}, {cache: true})
 
-      #toggle-menu
-        span.site-page
-          i.fas.fa-bars.fa-fw
+      //- r124：汉堡按钮只在菜单里真有条目的时候才画。
+      //- 本站 menu 是空的（menu: {}），空对象在 JS 里算「真」，
+      //- 于是手机上一直挂着一个点下去毫无反应的 ☰ —— 看着像坏了。
+      if Object.keys(theme.menu).length
+        #toggle-menu
+          span.site-page
+            i.fas.fa-bars.fa-fw

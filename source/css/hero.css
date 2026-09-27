@@ -16,7 +16,11 @@
    改成 fixed 之后位置焊死，退场交给 hero.js 那个 opacity 收尾。
    pointer-events 必须关掉：它现在永远盖在整屏上，
    不关的话下面的白卡、页脚全都点不动。 */
-.hero-sticky { position: fixed; inset: 0; height: 100vh; overflow: hidden;
+/* height 写两遍是有意的：老浏览器读不懂 dvh 就留 100vh 那行，
+   认得 dvh 的（Safari 15.4+ / Chrome 108+）用「真正看得见的那块高度」覆盖它。
+   手机浏览器地址栏会伸缩，100vh 是「地址栏收起来时」的高度 —— 比当前可视区高，
+   固定层按 100vh 撑开的话，贴在底部的分镜面板、「向下滚动」提示会被顶到屏幕外。 */
+.hero-sticky { position: fixed; inset: 0; height: 100vh; height: 100dvh; overflow: hidden;
   z-index: 2; pointer-events: none; will-change: opacity; }
 .hero-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 /* 浅海的暗角：四周轻轻压向水色，让中间的角色浮起来。
@@ -67,27 +71,36 @@
   background: #000;
   transition: opacity .55s cubic-bezier(.22,.61,.36,1); }
 .hero-loader.is-sky .hero-loader-veil { opacity: 0; }
+/* r124：加载页的「定格第一帧」。原来是写成 video 的 poster 属性，
+   但浏览器不把 poster 算进「首屏最大内容」，于是整页的 LCP 被拖到遮罩淡出
+   之后才出现的文字上（实测 3.3 秒）。这里补一张和 poster 同一张图的 <img>，
+   它自己就是首屏最大的元素，从第一次绘制起就算数 —— LCP 立刻提前。
+   排在 video 下面（z-index 1 < 2），video 一播出真帧就被盖住，画面没变化。 */
+.hero-loader-poster { position: absolute; inset: 0; z-index: 1;
+  width: 100%; height: 100%; object-fit: contain;
+  transform: scale(.8); transform-origin: 50% 46%; pointer-events: none; }
 /* 加载页那条水环素材：整帧铺满，object-fit: contain —— 素材是正方形的，
    四周那一圈黑就是画面本身的黑，屏幕上多出来的黑边跟它一模一样，
    所以不管窗口多宽多窄都不会被裁掉，也不用去凑边的颜色。
    scale(.8) 是把它收进来一点：既不顶到屏幕边，也给底下那两行字让出位置。 */
-.hero-loader-video { position: absolute; inset: 0; z-index: 1;
-  width: 100%; height: 100%; object-fit: contain; background: #000;
+.hero-loader-video { position: absolute; inset: 0; z-index: 2;
+  width: 100%; height: 100%; object-fit: contain;
   transform: scale(.8); transform-origin: 50% 46%; pointer-events: none; }
 /* 竖屏（手机）：contain 会把正方形素材缩成「屏幕宽度」那么大，水环只剩中间一小团，
    上下全是黑，空得厉害。这里换成 cover —— 素材铺满屏幕高度、左右溢出裁掉，
    水环正好撑满宽度。裁掉的左右两侧本来就是素材自己的黑底，跟加载页底色一样，
    看不出接缝；缩放收到 .92 是为了不顶到屏幕两边。 */
 @media (max-aspect-ratio: 1/1) {
-  .hero-loader-video { object-fit: cover; transform: scale(.92); }
+  .hero-loader-video,
+  .hero-loader-poster { object-fit: cover; transform: scale(.92); }
 }
 
 /* 底下那两行字：背景是黑底加一圈发光，字得比原来更「轻」一点才不抢戏，
    所以压低了亮度和字号；投影也从蓝色换成黑色（蓝色投在黑底上是脏的）。 */
-.hero-loader-title { position: relative; z-index: 2; margin: 0; font-size: 19px; font-weight: 600;
+.hero-loader-title { position: relative; z-index: 3; margin: 0; font-size: 19px; font-weight: 600;
   letter-spacing: .3em; text-indent: .3em; color: rgba(255,255,255,.92);
   text-shadow: 0 2px 18px rgba(0,0,0,.75); }
-.hero-loader-sub { position: relative; z-index: 2; margin: 10px 0 0; font-size: 12px; letter-spacing: .12em;
+.hero-loader-sub { position: relative; z-index: 3; margin: 10px 0 0; font-size: 12px; letter-spacing: .12em;
   color: rgba(255,255,255,.58); text-shadow: 0 2px 14px rgba(0,0,0,.75); }
 
 .hero-panels { position: absolute; inset: 0; pointer-events: none; }
@@ -104,7 +117,7 @@
 .hero-kicker { display: inline-block; margin-bottom: 10px; padding: 3px 11px 4px;
   font-size: 11px; letter-spacing: .12em; color: #14171a;
   background: rgba(255,255,255,.94); border: 1.5px solid #14171a; border-radius: 999px; }
-.hero-panel-inner h3 { margin: 0 0 8px; font-size: 20px; line-height: 1.3; color: #2c3129; }
+.hero-panel-inner h2 { margin: 0 0 8px; font-size: 20px; line-height: 1.3; color: #2c3129; }
 .hero-panel-inner p { margin: 0; font-size: 14px; line-height: 1.65; color: #5d6557; }
 .hero-tags { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
 .hero-tags span { font-size: 12px; padding: 3px 11px 4px; border-radius: 999px;
@@ -552,7 +565,14 @@ html.hb-dark .hb-card-title .hb-beta { color: #ffd88a; background: rgba(255, 196
 }
 @media (max-width: 640px) {
   .hero-blog { padding: 0 14px; }
-  .hero-blog-col--side { flex-direction: column; }
+  /* r115：上面 1180px 那条给侧栏卡片写了 flex:1 1 240px（横排时按 240px 起
+     等分宽度）。到这儿容器改回竖排了，不把 flex 复位的话那个 240px 基准
+     还在 —— 卡片比容器宽 50 多像素，右半边直接被顶出屏幕（实测顶出 52px）。
+     竖排下一律「占满一行」。 */
+  .hero-blog-col--side { flex-direction: column; flex-wrap: nowrap; }
+  .hero-blog-col--side .hb-card { flex: 0 0 auto; width: 100%; max-width: 100%; box-sizing: border-box; }
+  /* 「向下滚动」提示和右下角版权行在窄屏上会叠在一起，把提示条抬高一档。 */
+  .hero-hint { bottom: 56px; }
   .hb-post { flex-direction: column; min-height: 0; }
   .hb-post-art { order: 0; flex: 0 0 150px; }
   /* 窄屏时封面挪到卡顶，圆钮会压在正文上，直接收掉（触屏本来也没有悬停） */
@@ -565,6 +585,10 @@ html.hb-dark .hb-card-title .hb-beta { color: #ffd88a; background: rgba(255, 196
 
 @media (max-width: 900px) {
   .hero-scroll { height: 430vh; }
+  /* r115：这个宽度以下主题把内容区左右内边距收到 5px，正文卡片几乎贴着
+     屏幕边。补回一点点呼吸位（首页 hero-mode 有自己的 padding:0!important，
+     不受影响）。 */
+  #content-inner.layout { padding-left: 14px; padding-right: 14px; }
   .hero-panel-inner { max-width: 74vw; padding: 14px 16px; }
   .hero-panels > .hero-panel--about { --about-top: 54vh; }
   /* r77：顶上那行跟电脑端一样贴在最上沿；手机上它会跟左上角的站名撞在
@@ -576,7 +600,7 @@ html.hb-dark .hb-card-title .hb-beta { color: #ffd88a; background: rgba(255, 196
   .hero-panel[data-index="2"] { right: 5vw; top: 14vh; }
   .hero-panel[data-index="3"] { left: 5vw; bottom: 14vh; }
   .hero-panel[data-index="4"] { right: 5vw; bottom: 12vh; }
-  .hero-panel-inner h3 { font-size: 17px; }
+  .hero-panel-inner h2 { font-size: 17px; }
   .hero-panel-inner p { font-size: 13px; }
   .hero-frame { inset: -20px; border-width: 30px; border-radius: 68px; }
 }
@@ -743,7 +767,7 @@ html.hero-mode #footer { margin-top: -15px !important; }
    但那正是「一坨糊」的来源。现在是硬边：海水一条、照片一条，切口是干净的。
    文字全部压在照片上，所以照片整体压暗一点点（见下面的 ::after）。 */
 .kelo-bg { position: absolute; left: 0; right: 0; bottom: 0; top: 110px; z-index: 0;
-  background-image: url('/img/footer-ddd.jpg');
+  background-image: url('/img/footer-ddd.webp');
   background-size: cover; background-position: center 34%; background-repeat: no-repeat; }
 /* 照片上面那层「压暗」：不是滤镜（滤镜会连饱和度一起吃进去），
    只盖一层深海水色。深浅是按「哪里要放字」排的：
@@ -763,7 +787,7 @@ html.hero-mode #footer { margin-top: -15px !important; }
 #footer .kelo-desc,
 #footer .kelo-social-label,
 #footer .kelo-social-name,
-#footer .kelo-col h4,
+#footer .kelo-col h2,
 #footer .kelo-col a,
 #footer .kelo-legal {
   text-shadow: 0 1px 2px rgba(3, 20, 32, .58), 0 0 12px rgba(3, 20, 32, .38); }
@@ -806,7 +830,7 @@ html.hero-mode #footer { margin-top: -15px !important; }
 .kelo-navs { width: 60%; display: flex; gap: 80px; justify-content: flex-end; }
 /* color 必须显式写：主题里有一条全局的 h1~h6 字色，权重比「继承」高，
    不写的话这几个小标题会变成深蓝、压在照片上看不见。 */
-.kelo-col h4 { margin: 0 0 24px; font-size: 13px; font-weight: 600; letter-spacing: 1px;
+.kelo-col h2 { margin: 0 0 24px; font-size: 13px; font-weight: 600; letter-spacing: 1px;
   color: rgba(216, 241, 255, .84); text-transform: uppercase;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 #footer .kelo-col a { display: block; font-size: 14px; line-height: 2.4; color: rgba(238, 250, 255, .94);
@@ -892,7 +916,7 @@ html.hero-mode #footer { margin-top: -15px !important; }
 #rightside { display: none !important; }
 .hb-fabs { position: fixed; right: 22px; bottom: 26px; z-index: 92;
   display: flex; flex-direction: column; gap: 10px; }
-.hb-fab { width: 38px; height: 38px; padding: 0; border-radius: 50%; cursor: pointer;
+.hb-fab { position: relative; width: 38px; height: 38px; padding: 0; border-radius: 50%; cursor: pointer;
   border: 1px solid rgba(255, 255, 255, .55);
   background: rgba(255, 255, 255, .82); color: #2b7fb8; font-size: 14px;
   display: flex; align-items: center; justify-content: center; text-decoration: none;
@@ -901,6 +925,11 @@ html.hero-mode #footer { margin-top: -15px !important; }
   transition: background .22s ease, color .22s ease, transform .22s ease; }
 .hb-fab:hover { background: #2b7fb8; color: #fff; transform: translateY(-2px); }
 .hb-fab:active { transform: translateY(0); }
+/* 圆钮画多大是配色定下来的（38px），但真正的落点再往外扩 3px。
+   撑的是透明热区，外观一点没变；两个钮之间还留着 4px 空隙，不会互相抢点击。
+   手机上这三个钮本来就是 44px，这里只是顺手让宽屏触控设备也好点。 */
+.hb-fab::after { content: ''; position: absolute; top: -3px; right: -3px; bottom: -3px; left: -3px;
+  border-radius: 50%; }
 
 /* ---- ③ 不是首页的那些页（文章页 / 日历页…）也铺同一片流光蓝 ----
    只有那一片蓝要透出来：body、#body-wrap、#content-inner 全部透明，
@@ -1130,7 +1159,23 @@ html.hb-dark .hb-cal-mini:hover { background: rgba(79, 195, 247, .14); }
 
 @media (max-width: 768px) {
   .hb-cal-body { grid-template-columns: minmax(0, 1fr); gap: 18px; }
-  .hb-cal-day { min-height: 42px; }
+  /* r115：手机上日历一定放不下 7 个 48px 的格子，周日那列会被切掉一条边。
+     这里把缝收窄，并且把「等比撑高」关掉 —— 留着 aspect-ratio 的话，
+     下面那条 min-height 会把每格的最小宽度反推成 46px（7 × 46 + 6 条缝 > 容器），
+     关掉之后宽度交给 1fr，正好铺满，不高不矮。 */
+  .hb-cal-grid { gap: 4px; }
+  .hb-cal-day { aspect-ratio: auto; min-height: 46px; padding: 5px 1px 6px; border-radius: 10px; }
+  .hb-cal-num { font-size: 13px; }
+  .hb-cal-week { font-size: 11px; padding: 2px 0 4px; letter-spacing: .02em; }
+  .hb-cal-fest { font-size: 9px; padding: 0 3px; }
+
+  /* r115 手指点得到：翻月箭头原来 34×34、回到今天 74×28、删批注 26×26。
+     都撑到 44 上下（删除钮只能到 32，再大就会盖住日子本身）。 */
+  .hb-cal-arrow { width: 44px; height: 44px; font-size: 15px; }
+  .hb-cal-mini { display: inline-flex; align-items: center; justify-content: center;
+    min-height: 44px; padding: 0 16px; font-size: 13px; }
+  .hb-cal-del { width: 32px; height: 32px; top: 4px; right: 4px; font-size: 14px; }
+  .hb-cal-title { min-width: 104px; font-size: 17px; }
   .hb-cal-input--time { flex: 1 1 100%; }
 }
 
@@ -1297,7 +1342,8 @@ html.hb-dark .hb-cal-festchip { background: rgba(255, 143, 122, .14); color: #ff
   .hb-mini-cal-card { max-width: 340px; }
 }
 @media (max-width: 640px) {
-  .hb-mini-cal-card { max-width: 420px; }
+  /* r115：420px 比手机上的容器还宽，等于没封顶，还会把卡片撑出屏幕。 */
+  .hb-mini-cal-card { max-width: 100%; }
 }
 
 /* ============================================================
@@ -1589,12 +1635,13 @@ html.hb-chat-page #page { background-color: transparent !important; box-shadow: 
 
    素材都是桌面那三张原图现裁的，落在 source/img/：
      dddjpg.jpg   1440x2534 竖 → 逆时针转横 2534x1440 → 裁 2534x1267
-                  → footer-ddd.jpg 2400x1200（首页收尾页 + 子页页脚）
+                  → footer-ddd.webp 2400x1200（首页收尾页 + 子页页脚）
      aaa8.jpg     1440x2540 竖 → 逆时针转横 2540x1440 → 裁 2540x706
-                  → post-top.jpg   2400x667（文章页顶端）
-     电脑壁纸 4K  3840x2160 横 → 压到 1920x1080 → chat-bg.jpg（聊天页）
+                  → post-top.webp   2400x667（文章页顶端）
+     电脑壁纸 4K  3840x2160 横 → 压到 1600x900 → chat-bg.webp（聊天页）
    要换图：把同名文件覆盖掉就行，下面这些规则不用动。
-   ============================================================ */
+   （r118 上线瘦身：JPEG 全部转成 WebP，肉眼无差、体积只有原来三成左右。）
+    ============================================================ */
 
 /* ---- ② 文章页顶端 ----
    主题 _layout/head.styl 给 #page-header 铺的是 $light-blue 纯色，
@@ -1608,7 +1655,7 @@ html.hb-chat-page #page { background-color: transparent !important; box-shadow: 
    主题那条规则带了 :not(.not-top-img)，往下滑之后 #page-header 一被加上
    .not-top-img，主题那条就整个失效，只剩我们这条在管。 */
 html.hb-ocean #page-header.post-bg {
-  background-image: url('/img/post-top.jpg');
+  background-image: url('/img/post-top.webp');
   background-position: center 46%;
   background-color: #0d3247;
 }
@@ -1652,7 +1699,7 @@ html.hb-chat-page::before {
   inset: -8vmax;
   z-index: -2;
   pointer-events: none;
-  background-image: var(--hbc-veil), url('/img/chat-bg.jpg');
+  background-image: var(--hbc-veil), url('/img/chat-bg.webp');
   background-size: cover, cover;
   background-position: center 22%, center 22%;
   background-repeat: no-repeat, no-repeat;
@@ -1688,7 +1735,7 @@ html.hb-ocean:not(.hero-mode) #footer {
   background-color: #0b3149;
   background-image:
     linear-gradient(180deg, rgba(6, 34, 52, .44) 0%, rgba(4, 22, 36, .72) 100%),
-    url('/img/footer-ddd.jpg');
+    url('/img/footer-ddd.webp');
   background-size: cover, cover;
   background-position: center top, center 40%;
   background-repeat: no-repeat, no-repeat;
@@ -1696,3 +1743,101 @@ html.hb-ocean:not(.hero-mode) #footer {
 }
 html.hb-ocean:not(.hero-mode) #footer::before { background-color: transparent; }
 html.hb-ocean:not(.hero-mode) #footer .footer-other { background-color: transparent; }
+
+/* ============================================================
+   2026-09-27 r115 手机端「点得到」补齐
+   手指点击的舒适区是 44px 上下，下面这几处在手机上原来只有 26~34px，
+   点下去十次有三四次是空的。这里只把「能点的范围」撑大，
+   图标/字本身大小基本不动，所以看上去跟以前一样。
+   （主题自带的那份样式在 #post 里嵌套最浅，用 #post 起头就能压住它） */
+@media (max-width: 768px) {
+  /* ① 文章底部那排分享按钮（微博 / QQ / 微信 …）：1.85em ≈ 26px */
+  /* 主题那条是 #post .tag_share .post-share .social-share .social-share-icon，
+     多一层 .post-share，优先级比这里高一层，所以必须把类名写全才压得住
+     （两条都带 #post 且斜杠后面的层级一致时，后加载的这份才赢）。 */
+  #post .tag_share .post-share .social-share .social-share-icon,
+  #post .tag_share .social-share .social-share-icon {
+    box-sizing: border-box;
+    width: 44px; height: 44px; line-height: 44px; margin: 0 2px; font-size: 18px; }
+
+  /* ② 收尾页三列导航里的链接：原来只有行高 2.4 ≈ 34px */
+  #footer .kelo-col a { line-height: 2.9; }
+  /* 社交那几行（平台图标 + 名字）本身整行可点，这里只把行距拉开一点防误触 */
+  #footer .kelo-social-list { gap: 13px; }
+
+  /* ③ 右下角三个悬浮钮：34px → 44px，同时往角上再收一点，
+     撑大之后不至于挡到卡片边上的字 */
+  .hb-fabs { right: 10px; bottom: 16px; gap: 10px; }
+  .hb-fab { width: 44px; height: 44px; font-size: 15px; }
+
+  /* ④ 网易云卡片里的两个小钮：播放/暂停是 34×34 的独立圆钮、
+     「换一批」只有 24px 高（81×24），手机上点空率很高。都撑到 44。
+     「换一批」是靠 min-height 撑的，文字本身大小不动，所以只是胖一点、不难看；
+     那一行下面还有单独一行的说明文字，撑高不会把卡片挤变形。
+     （三首歌那几行不用管：点哪儿都算，整行 li 就是热区，行高 40+ 。） */
+  .hb-music-toggle { width: 44px; height: 44px; font-size: 15px; }
+  .hb-music-more { min-height: 44px; padding: 0 18px; font-size: 13px; }
+}
+
+/* ============================================================
+   r123 上线前收口（2026-09-27）
+   ① Follow Me 的 GitHub 图标从字体图标换成内联 SVG
+   ② 微信 / 原神两行改成 <button> 后的外观复位
+   ③ 手机上还差一口气的几个点按热区
+   ============================================================ */
+/* ① FontAwesome 的图标是「1em 见方的 inline-block、基线再往下沉 .125em」，
+   换成 SVG 后照抄这两条，图标大小和位置才不会跳一下。 */
+#card-info-btn .card-info-icon { width: 1em; height: 1em; vertical-align: -0.125em; }
+
+/* ② 微信 / 原神：只能复制、没有网页可跳，所以用的是 <button>。
+   把浏览器塞给 button 的那层灰底灰边全部抹掉，让它和旁边几个 <a> 长得一模一样。 */
+#footer button.kelo-social-item { appearance: none; -webkit-appearance: none;
+  background: none; border: 0; padding: 0; margin: 0;
+  font: inherit; color: inherit; text-align: left; cursor: pointer; }
+/* 键盘 Tab 过来时给个看得见的圈：<a> 和 <button> 都给 */
+#footer .kelo-social-item:focus-visible { outline: 2px solid rgba(255, 255, 255, .9);
+  outline-offset: 3px; border-radius: 10px; }
+
+@media (max-width: 768px) {
+  /* ③ 顶栏那行站名（「沃雅妮莎的个人空间」）本体只有 25px 高。
+     它是行内元素，直接加内边距就能把「能点到的范围」撑到 47px，
+     而字的位置纹丝不动 —— 行内元素的上下内边距不参与行高计算。
+     #blog-info 上带着主题的 .limit-one-line（overflow:hidden），
+     不放开的话这块热区会被裁回 25px，所以一起改掉。 */
+  #nav #blog-info { overflow: visible; }
+  #nav a.nav-site-title { padding: 11px 0; }
+  /* 文章页左上角「文章名 ⇄ 返回首页」：36 → 44。同理只补上下内边距 */
+  #page-header #blog-info > .nav-page-title { padding: 4px 0; }
+  /* 收尾页那几行社交平台：整行可点，先把行高顶到 44 再谈好不好看 */
+  #footer .kelo-social-item { min-height: 44px; }
+  /* 资料卡最下面那个 Follow Me 按钮：35 → 44 */
+  #card-info-btn { min-height: 44px; line-height: 44px; }
+}
+
+/* ============================================================
+   r124 手机端最后两处 + 输入框字号（2026-09-27）
+   ① 输入框字号不能小于 16px：iOS Safari 一聚焦就整页放大，
+      视觉上像「网页突然蹦了一下」，是手机端最常见的差评来源。
+      聊天输入框原来 14.5px、日历批注输入框 13px，都偏小。
+   ② 批注条右上角那个删除小圆钮：原来 26×26（手机上 32×32），
+      手指点空率很高。它在 .hb-cal-note 里是绝对定位，
+      那一块本来就留了 44px 的右内边距，所以撑到 44 不会被字压住。
+   ③ 右栏「这个月都有什么」里的长标题原来一行切掉（ellipsis），
+      手机上放两行更好读；行本身也撑到 44 好点。
+   ============================================================ */
+@media (max-width: 768px) {
+  /* ① */
+  .hbc-input { font-size: 16px; }
+  .hb-cal-input { font-size: 16px; }
+  /* 顺手把批注「保存」也撑到手指舒服的高度（原来约 38px） */
+  .hb-cal-save { font-size: 15px; min-height: 44px; padding: 0 22px; }
+
+  /* ② */
+  .hb-cal-note { padding-right: 50px; min-height: 54px; }
+  .hb-cal-del { width: 44px; height: 44px; top: 50%; right: 2px; margin-top: -22px; font-size: 15px; }
+
+  /* ③ */
+  .hb-cal-item-btn { min-height: 44px; align-items: center; }
+  .hb-cal-item-what { white-space: normal; display: -webkit-box;
+    -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+}

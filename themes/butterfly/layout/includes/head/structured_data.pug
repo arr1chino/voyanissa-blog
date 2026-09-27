@@ -1,4 +1,8 @@
-if theme.structured_data
+//- 先声明一份空的：下面哪条分支成了就填上它，一条都没成就不输出这个标签。
+//- （原来只认「文章页」和「主题自带首页」两种，其余页面会留下一个空的
+//-   application/ld+json —— 空的结构化数据是无效的，搜索引擎会当成错误。）
+- var jsonLdScript = ''
+if theme.structured_data && theme.structured_data.enable
   if page.layout === 'post'
     -
       // https://developers.google.com/search/docs/appearance/structured-data/article
@@ -31,7 +35,7 @@ if theme.structured_data
       jsonLdScript = JSON.stringify(jsonLd, null, 2)
     -
 
-  else if is_home() && (!page.current || page.current === 1)
+  else if (is_home() || page.path === '' || page.path === 'index.html') && (!page.current || page.current === 1)
     -
       // https://developers.google.com/search/docs/appearance/site-names#website
 
@@ -41,7 +45,7 @@ if theme.structured_data
 
       if (isRootOrSubdomain) {
         const domain = new URL(config.url).hostname;
-        const alternateNames = theme.structured_data.alternate_name || [];
+        const alternateNames = [].concat(theme.structured_data.alternate_name || []);
 
         if (config.subtitle) {
           alternateNames.push(config.subtitle);
@@ -63,5 +67,6 @@ if theme.structured_data
       }
     -
 
+if jsonLdScript
   script(type="application/ld+json").
     !{jsonLdScript}

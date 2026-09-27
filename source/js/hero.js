@@ -75,12 +75,12 @@ const KEYS = [
      fit 从 0.574 放到 0.640，多看到约 11% 的身高；focus 原地不动，
      所以她不会上下乱跑，只是头顶那片天和脚下的裙子各多露一点。
      滚到下一幕再轻轻推近回原样，等于开场一个很缓的推镜。 */
-  { at: 0.00, cam: { fit: 0.640, focus: 0.782, side: 0.00, fov: 34 }, turn: 0,
+  { at: 0.00, cam: { fit: 0.640, fitN: 1.150, focus: 0.782, side: 0.00, fov: 34 }, turn: 0,
       bg: 0x4fb4da, bg2: 0x2d88b3 },
 
   /* 1 半身正面：第一张资料卡。镜头按「头顶留 1/8 空白、下沿切到大腿二分之一」
      解出来的 fit/focus（用骨骼量的大腿中点当标尺，误差 0.3px 以内）。不加黑色滤镜。 */
-  { at: 0.20, cam: { fit: 0.574, focus: 0.782, side: 0.00, fov: 34 }, turn: 0,
+  { at: 0.20, cam: { fit: 0.574, fitN: 1.030, focus: 0.782, side: 0.00, fov: 34 }, turn: 0,
       bg: 0x4fb4da, bg2: 0x2d88b3 },
 
   /* 2 右下仰视脸部特写：取景跟以前那版脸部特写同一套（fit/focus 没动），
@@ -88,12 +88,12 @@ const KEYS = [
      yaw 负值把机位绕到她的右前方，所以是「右下往上看」。
      lookZ 把注视点挪到脸前面（不挪的话仰拍会框到脖子）。配虚化 + 黑色滤镜。
      yaw/elev 是按「仰角压得太狠了」往回收过一档的（-0.30/-0.17 → -0.33/-0.13）。 */
-  { at: 0.40, cam: { fit: 0.170, focus: 0.884, side: 0.00, fov: 34, yaw: -0.33, elev: -0.13, lookZ: 0.090, lookX: 0.02 },
+  { at: 0.40, cam: { fit: 0.170, fitN: 0.340, focus: 0.884, side: 0.00, fov: 34, yaw: -0.33, elev: -0.13, lookZ: 0.090, lookX: 0.02 },
       turn: 0, bg: 0x49abd4, bg2: 0x2880ab, fx: 1, shade: 1 },
 
   /* 3 半身背面：取景跟半身正面同一套数字（一样只露到大腿二分之一），
      背景在这一幕压得最暗，黑色滤镜继续开着。 */
-  { at: 0.60, cam: { fit: 0.574, focus: 0.782, side: 0.00, fov: 34 }, turn: Math.PI,
+  { at: 0.60, cam: { fit: 0.574, fitN: 1.030, focus: 0.782, side: 0.00, fov: 34 }, turn: Math.PI,
       bg: 0x419cc6, bg2: 0x22759f, shade: 1 },
 
   /* 4 左上角俯拍脸部特写：yaw 取正值，把机位绕到她的左前方（取负值就跑到右前方，
@@ -103,7 +103,7 @@ const KEYS = [
      lookZ 0.10 把注视点往前挪到头的位置（不挪的话脸会被推到画面右下角），
      lookX 0.04 再把注视点往她的左手侧带一点，人就被挤到画面左上角、
      给右下角的面板腾出地方。虚化 + 黑色滤镜都开着。 */
-  { at: 0.80, cam: { fit: 0.240, focus: 0.870, side: 0.00, fov: 34, yaw: 0.21, elev: 0.26, lookZ: 0.100, lookX: 0.04 },
+  { at: 0.80, cam: { fit: 0.240, fitN: 0.400, focus: 0.870, side: 0.00, fov: 34, yaw: 0.21, elev: 0.26, lookZ: 0.100, lookX: 0.04 },
       turn: Math.PI * 2, bg: 0x4aadd2, bg2: 0x297fab, fx: 1, shade: 1 },
 
   /* 5 正面脸部特写收尾：转回正面、正对她，取景按「脸在画面正中、整个头完整
@@ -113,7 +113,7 @@ const KEYS = [
      这些数字来自「把模型藏起来截图相减」量的真实像素边界 + 骨头投影行号，
      换模型、改姿势或改景别都得重量一遍，工具：work/model-tools/act5fit.js。
      虚化和黑色滤镜都在这里收掉，画面干净地交给下面的博客。 */
-  { at: 1.00, cam: { fit: 0.3200, focus: 0.8930, side: 0.00, fov: 34 }, turn: Math.PI * 2,
+  { at: 1.00, cam: { fit: 0.3200, fitN: 0.400, focus: 0.8930, side: 0.00, fov: 34 }, turn: Math.PI * 2,
       bg: 0x4fb4da, bg2: 0x2d88b3 },
 ];
 
@@ -628,11 +628,25 @@ function measure() {
 }
 
 function camFor(cam, turn) {
-  const dist = (cam.fit * size.y * 0.5) / Math.tan(deg(cam.fov) * 0.5) * 1.12;
+  /* 竖屏修正。手机是「又高又窄」，同一套 fit 拿到竖屏上，画面横向会被切掉一大块 ——
+     量过：390 宽的屏上，「半身正面」那一幕她算上袖子要占 235% 的画面宽度，
+     两台特写更极端（只剩半张脸）。所以每一幕额外给了一套竖屏专用的 fit（fitN），
+     六幕的 fitN 全部是「竖屏实拍扫参数」逐个试出来的，不是按桌面那套乘系数推的 ——
+     早先试过乘 1.45（0.928 / 0.832），那个系数只按「画面宽度够不够」算了，
+     漏了「她正面朝着镜头、脸和胸离机位比包围盒中心近半个身位」这一层：
+     近处的东西会被透视放大，所以按 1.45 摆出来头顶是顶出画面被切掉的。
+     第 5 幕 0.400、第 2 幕 0.340、第 4 幕 0.400 是「两只眼睛都在框里、脸占满画面」；
+     第 0/1/3 幕 1.150 / 1.030 / 1.030 是「头顶留出空白、袖子完整、下沿切到大腿」。
+     效果是「人整体往后退一点，横向伸出去的袖子、头发不再被切」。
+     两套之间按屏幕宽高比平滑过渡：≥1.25（宽屏/桌面）用桌面那套、≤0.95（竖屏手机）
+     用竖屏那套，中间线性混，所以转屏、改窗口大小都不会跳。 */
+  const wMix = clamp((1.25 - camera.aspect) / (1.25 - 0.95), 0, 1);
+  const fit = cam.fit + ((cam.fitN == null ? cam.fit : cam.fitN) - cam.fit) * wMix;
+  const visH = fit * size.y * 1.12;
+  const dist = (visH * 0.5) / Math.tan(deg(cam.fov) * 0.5);
   const focusY = box.min.y + size.y * cam.focus;
   /* 鼠标视差跟着当前景别走：不管推得多近，位移都只占画面的 5%（横）/ 2.5%（纵），
      所以特写的时候也不会“一晃就飞出去”。 */
-  const visH = cam.fit * size.y * 1.12;
   const visW = visH * camera.aspect;
   const lat = size.y * cam.side * 0.5 + mouseSmooth.x * visW * 0.05;
   const up = mouseSmooth.y * visH * 0.025;
@@ -683,6 +697,10 @@ function applyKey(px) {
 
   const cam = {
     fit: a.cam.fit + (b.cam.fit - a.cam.fit) * t,
+    /* 竖屏那套 fit（fitN）也要一起插值 —— 漏了它，窄屏上滚到两幕中间就会跳。
+       没写 fitN 的幕按 fit 算，等于「这一幕不分竖屏」。 */
+    fitN: (a.cam.fitN == null ? a.cam.fit : a.cam.fitN) +
+      ((b.cam.fitN == null ? b.cam.fit : b.cam.fitN) - (a.cam.fitN == null ? a.cam.fit : a.cam.fitN)) * t,
     focus: a.cam.focus + (b.cam.focus - a.cam.focus) * t,
     side: a.cam.side + (b.cam.side - a.cam.side) * t,
     fov: a.cam.fov + (b.cam.fov - a.cam.fov) * t,
@@ -1076,11 +1094,37 @@ function fallbackPoster() {
   hideLoader();
   const poster = document.createElement('div');
   poster.className = 'hero-poster';
-  poster.style.backgroundImage = 'url(/img/top.png)';
+  poster.style.backgroundImage = 'url(/img/top.webp)';
   poster.style.display = 'block';
   if (canvas) canvas.style.display = 'none';
   stage.insertBefore(poster, canvas.nextSibling);
-  panels.forEach((el) => { el.style.opacity = '1'; el.style.transform = 'none'; });
+  /* r115：退成静态海报时不能把六张分镜卡一起摊开 —— 它们是绝对定位在同一处，
+     一摊开就是六张完全叠死（手机实测：一张都读不清、也点不着）。
+     只留开场那张「About Me」，其余整块收掉；没有 3D 也就没有分镜联动，
+     留着只会挡视线。 */
+  panels.forEach((el) => {
+    if (el.classList.contains('hero-panel--about')) {
+      el.style.opacity = '1';
+      el.style.transform = 'none';
+    } else {
+      el.style.display = 'none';
+    }
+  });
+  /* 兜底这一支没有 3D 的滚动联动，但「滑过去之后这一屏要淡掉」还是要有：
+     .hero-sticky 是 fixed，不淡的话海报会一路焊在屏幕上不撒手。
+     顺手把 .hero-scroll 那 500vh 的空白砍成一屏 —— 不然手机要空滑四屏
+     才够得着下面的博客区。 */
+  const host = document.querySelector('.hero-scroll');
+  if (host) host.style.height = '100vh';
+  const fadePoster = () => {
+    const h = window.innerHeight;
+    const y = window.scrollY || window.pageYOffset || 0;
+    const o = y <= h * 0.55 ? 1 : Math.max(0, 1 - (y - h * 0.55) / (h * 0.45));
+    stage.style.opacity = String(o);
+  };
+  fadePoster();
+  window.addEventListener('scroll', fadePoster, { passive: true });
+  window.addEventListener('resize', fadePoster);
   document.documentElement.classList.add('hero-fallback');
 }
 
@@ -1129,13 +1173,14 @@ function boot() {
   initCardReveal();
   /* 兜底：不管下面是正常出模型、还是画不出来退成静态海报，
      都不能让加载遮罩永远挂着。真卡住了（网络断在半路、一直不报错），
-     12 秒把副标题换成提示，18 秒直接放行 —— 宁可让用户看见空海，
-     也好过永远转圈。正常情况这两个定时器都轮不到。 */
+     5 秒把副标题换成提示，12 秒直接放行 —— 宁可让用户看见空海，
+     也好过永远转圈。正常情况这两个定时器都轮不到
+     （本机实测模型就绪在 1.3~1.9 秒，手机慢一点也就三四秒）。 */
   setTimeout(() => {
     const sub = document.getElementById('hero-loader-sub');
     if (sub) sub.textContent = '这片海有点大，再等一下下…';
-  }, 12000);
-  setTimeout(hideLoader, 18000);
+  }, 5000);
+  setTimeout(hideLoader, 12000);
 
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const smallScreen = window.innerWidth < 760 && (navigator.hardwareConcurrency || 4) <= 4;
