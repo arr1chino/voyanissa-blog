@@ -1649,7 +1649,7 @@ html.hb-chat-page #page { background-color: transparent !important; box-shadow: 
                   → footer-ddd.webp 2400x1200（首页收尾页 + 子页页脚）
      aaa8.jpg     1440x2540 竖 → 逆时针转横 2540x1440 → 裁 2540x706
                   → post-top.webp   2400x667（文章页顶端）
-     电脑壁纸 4K  3840x2160 横 → 压到 1600x900 → chat-bg.webp（聊天页）
+     电脑壁纸 4K  3840x2160 横 → 压到 2560x1440 → chat-bg.webp（聊天页）
    要换图：把同名文件覆盖掉就行，下面这些规则不用动。
    （r118 上线瘦身：JPEG 全部转成 WebP，肉眼无差、体积只有原来三成左右。）
     ============================================================ */
@@ -1684,11 +1684,18 @@ html.hb-ocean #page-header.post-bg::before {
       rgba(4, 24, 38, 0) 62%);
 }
 
-/* ---- ③ 聊天页：整页一张壁纸，糊掉当底 ----
+/* ---- ③ 聊天页：整页一张壁纸当底 ----
    这一页没有 #web_bg，也没有首页那层 .hero-flow，底色本来是 html.hb-ocean
    那条纯色（深色模式下是 #0b2c40）。所以可以直接在 html 上挂一层 fixed 的
    ::before：z-index:-2 让它落在页面所有内容下面，但仍在 html 自己那层底色之上。
-   inset 取负值 + scale 是给 blur 留边 —— 不然模糊会把四条边吸出一圈透明的软边。
+
+   r128 改版：原来 blur(13px) 把壁纸糊得认不出是张图（用户反馈「背景呢」）。
+   现在只留 3px 柔化，缩放比也拉回几乎 1:1 —— 壁纸能看清脸和花，
+   聊天窗自己那层 backdrop-filter: blur(20px) 继续提供磨砂玻璃质感。
+   inset 从 -8vmax 收到 -10px：只为了 3px 的模糊不吃出透明边，顺手把
+   「元素被撑大 → 图被放大 → 发虚」这个副作用一起去掉了。
+   水色罩子也调淡（深色 .30→.48，浅色 .10→.22），整体更接近浅海蓝。
+   底图同时从 1280x720 换成 2560x1440，不再欠采样。
 
    上面那层渐变（--hbc-veil）和照片一起被 blur 吃进去，等于「先给照片垫一层
    水色再模糊」，白天是浅水、黑天是深海。
@@ -1699,23 +1706,30 @@ html.hb-ocean #page-header.post-bg::before {
    那片蓝就不要了。 */
 html.hb-chat-page .hero-flow { display: none !important; }
 html.hb-chat-page {
-  --hbc-veil: linear-gradient(180deg, rgba(8, 40, 62, .38) 0%, rgba(5, 22, 36, .54) 100%);
+  --hbc-veil: linear-gradient(180deg, rgba(7, 36, 56, .30) 0%, rgba(4, 20, 34, .48) 100%);
 }
 html.hb-chat-page:not(.hb-dark) {
-  --hbc-veil: linear-gradient(180deg, rgba(240, 250, 255, .16) 0%, rgba(198, 230, 247, .28) 100%);
+  --hbc-veil: linear-gradient(180deg, rgba(240, 250, 255, .10) 0%, rgba(198, 230, 247, .22) 100%);
 }
 html.hb-chat-page::before {
   content: '';
   position: fixed;
-  inset: -8vmax;
+  inset: -10px;
   z-index: -2;
   pointer-events: none;
   background-image: var(--hbc-veil), url('/img/chat-bg.webp');
   background-size: cover, cover;
   background-position: center 22%, center 22%;
   background-repeat: no-repeat, no-repeat;
-  filter: blur(13px) saturate(114%);
-  transform: scale(1.05);
+  filter: blur(3px) saturate(108%);
+}
+/* 页面大标题取的是 var(--text-highlight-color)（黑天是浅色），直接压在亮色壁纸上
+   容易糊，补一层同向阴影把字从照片里拎出来；白天反过来用白色辉光。 */
+html.hb-chat-page .page-title {
+  text-shadow: 0 1px 10px rgba(3, 20, 34, .45), 0 2px 26px rgba(3, 20, 34, .28);
+}
+html.hb-chat-page:not(.hb-dark) .page-title {
+  text-shadow: 0 1px 8px rgba(255, 255, 255, .8), 0 2px 20px rgba(255, 255, 255, .6);
 }
 
 /* 聊天窗本身改成磨砂玻璃：底色透出来，背后那层壁纸在窗子范围里再过一遍模糊。
@@ -1723,7 +1737,7 @@ html.hb-chat-page::before {
 .hbc-shell {
   -webkit-backdrop-filter: blur(20px) saturate(145%);
   backdrop-filter: blur(20px) saturate(145%);
-  background: linear-gradient(180deg, rgba(255, 255, 255, .78) 0%, rgba(238, 247, 253, .66) 100%);
+  background: linear-gradient(180deg, rgba(255, 255, 255, .86) 0%, rgba(238, 247, 253, .74) 100%);
   border-color: rgba(255, 255, 255, .72);
 }
 html.hb-dark .hbc-shell {
@@ -1732,7 +1746,7 @@ html.hb-dark .hbc-shell {
   box-shadow: 0 24px 60px rgba(0, 0, 0, .42);
 }
 /* 窗子里的输入框原来是不透明白（黑天是近黑），压在磨砂玻璃上会像贴了张补丁 */
-.hbc-input { background: rgba(255, 255, 255, .74); }
+.hbc-input { background: rgba(255, 255, 255, .84); }
 html.hb-dark .hbc-input { background: rgba(3, 17, 28, .46); }
 
 /* ---- ④ 子页页脚：铺同一张 dddjpg ----
