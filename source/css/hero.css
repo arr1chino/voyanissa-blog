@@ -185,8 +185,12 @@
 .hero-hint { position: absolute; left: 50%; bottom: 30px; transform: translateX(-50%); z-index: 8;
   font-size: 12px; letter-spacing: .18em; color: #eaf9ff; opacity: .88;
   text-shadow: 0 1px 6px rgba(9,48,72,.55); }
-.hero-credit { position: absolute; right: 28px; bottom: 20px; z-index: 8; font-size: 11px; color: #e2f5ff; opacity: .72;
+/* r133：右下角那三颗圆钮（.hb-fabs，宽 38px + 右边距 22px）会压住这行
+   「模型提供 miHoYo…」。所以整行往左挪到按钮之外：宽屏留 104px 空档，
+   窄屏按钮是 44px 且更贴角，留 64px 就够，同时跟着按钮一起往下收。 */
+.hero-credit { position: absolute; right: 104px; bottom: 20px; z-index: 8; font-size: 11px; color: #e2f5ff; opacity: .72;
   text-shadow: 0 1px 6px rgba(9,48,72,.55); }
+@media (max-width: 820px) { .hero-credit { right: 64px; bottom: 16px; } }
 
 /* ===== 窗口圆角：整站常驻的一圈边框 =====
    形状没变，还是「外扩 30px + 边框厚 45px」→ 圆角落在画面外、内侧圆角 50px。
@@ -771,21 +775,28 @@ html.hero-mode #footer { margin-top: -15px !important; }
 /* 照片：从 110px 那条线往下全出血，一直铺到尾页最底。
    顶上那条「由透明到实」的遮罩已经撤掉 —— 它原本是让照片化进海水里，
    但那正是「一坨糊」的来源。现在是硬边：海水一条、照片一条，切口是干净的。
-   文字全部压在照片上，所以照片整体压暗一点点（见下面的 ::after）。 */
+   文字全部压在照片上，所以照片整体压暗一点点（见下面的 ::after）。
+
+   r133 换图 + 换裁法：现在是 2534x1133 的横带（2.236:1，整颗头连花带手都在带子里），
+   正好等于桌面收尾页容器的比例 —— 1440/1920 下几乎 1:1 落在图上，不再被 cover
+   来回裁成「只露半个额头」。窄屏容器是竖的（390x967 ≈ 0.4:1），cover 只横向裁，
+   所以位置给到 58%，把她的脸拽回画面中间（原来 34% 竖着调、手机上只看见头发）。 */
 .kelo-bg { position: absolute; left: 0; right: 0; bottom: 0; top: 110px; z-index: 0;
   background-image: url('/img/footer-ddd.webp');
-  background-size: cover; background-position: center 34%; background-repeat: no-repeat; }
+  background-size: cover; background-position: center 50%; background-repeat: no-repeat; }
+@media (max-width: 820px) { .kelo-bg { background-position: 58% 50%; } }
 /* 照片上面那层「压暗」：不是滤镜（滤镜会连饱和度一起吃进去），
    只盖一层深海水色。深浅是按「哪里要放字」排的：
    顶上 0~15% 是字最密的一带（字标 / 简介 / 三列链接都在这一块），
    而照片这一带正好是整张最亮的天光 + 树叶，所以压到 50%；
    往下中段只留 14%~20%，照片原味和水面的亮全留着；
    最底下一档回一点点，把字标和水面压住。
-   这不是深色版那层 60% 黑罩 —— 整张照片仍然是亮的、看得清的。 */
+   这不是深色版那层 60% 黑罩 —— 整张照片仍然是亮的、看得清的。
+   r133：整条往下压了约 8 个百分点（0.58→0.50 起），照片少一层蓝雾，看着更透。 */
 .kelo-bg::after { content: ''; position: absolute; inset: 0;
-  background: linear-gradient(180deg, rgba(14, 68, 100, .58) 0%, rgba(12, 62, 92, .46) 13%,
-    rgba(9, 50, 76, .30) 27%, rgba(6, 36, 56, .15) 45%, rgba(4, 26, 42, .10) 64%,
-    rgba(3, 20, 34, .26) 100%); }
+  background: linear-gradient(180deg, rgba(14, 68, 100, .50) 0%, rgba(12, 62, 92, .38) 13%,
+    rgba(9, 50, 76, .24) 27%, rgba(6, 36, 56, .12) 45%, rgba(4, 26, 42, .08) 64%,
+    rgba(3, 20, 34, .22) 100%); }
 .kelo-inner { position: relative; z-index: 10; }
 /* 浅色字在照片上最容易丢的地方是「亮天」那一块（白云、水面反光）。
    这里给字垫一圈很淡的深色影子，亮底深底都兜得住；照片本身一个像素没动。 */
@@ -853,9 +864,13 @@ html.hero-mode #footer { margin-top: -15px !important; }
    现在整块拿掉：模板里的 .kelo-mark 也一并删了，配套的 /img/footer-fill.jpg
    从此没人引用。尾页高度掉到 ~710px，一屏装得下。要恢复就回这一版之前的备份。 */
 
-.kelo-legal { position: relative; margin-top: 48px; padding: 0 60px; display: flex; flex-wrap: wrap;
+/* r133：这一行「模型提供 miHoYo · 改造 观海子 · 仅作学习展示 + © + 框架」是
+   居中排的，右下角那三颗圆钮正好压在它尾巴上（实测压住 32px）。右边多留
+   104px 空档把整行往左推，窄屏跟着按钮收到 62px。左边保持 60px 不动。 */
+.kelo-legal { position: relative; margin-top: 48px; padding: 0 104px 0 60px; display: flex; flex-wrap: wrap;
   justify-content: center; gap: 8px 22px; font-size: 12px; line-height: 1.7;
   color: rgba(224, 243, 255, .78); }
+@media (max-width: 820px) { #footer .kelo-legal { padding-right: 62px; } }
 /* 原来这里垫了一小块很淡的白（深色字版本用来把它从照片里托出来）。
    字翻成浅色之后，白底反而会把字吃掉，所以撤掉 —— 现在靠字自己那圈深色影子。 */
 #footer .kelo-legal a { color: rgba(228, 245, 255, .82); text-decoration: none;
@@ -1648,11 +1663,12 @@ html.hb-chat-page #page { background-color: transparent !important; box-shadow: 
    ④ 子页（文章页 / 日历页…）的页脚也铺同一张 dddjpg，
       和首页收尾页是同一张图 —— 整站从上到下就这一组水色。
 
-   素材都是桌面那三张原图现裁的，落在 source/img/：
-     dddjpg.jpg   1440x2534 竖 → 逆时针转横 2534x1440 → 裁 2534x1267
-                  → footer-ddd.webp 2400x1200（首页收尾页 + 子页页脚）
-     aaa8.jpg     1440x2540 竖 → 逆时针转横 2540x1440 → 裁 2540x706
-                  → post-top.webp   2400x667（文章页顶端）
+   素材（r133 重裁；原图在 work/img-tools/src/ 与桌面「沃壁纸」）：
+     dddjpg.jpg   1440x2534 竖 → 逆时针转横 2534x1440 → 裁 (0,100,2534,1133)
+                  → footer-ddd.webp 2400x1073（首页收尾页 + 子页页脚；整颗头都在带子里）
+     电脑壁纸 4K  3840x2160 横 → 裁 (0,280,3840,800) → post-top.webp 1920x400
+                  （文章页顶端。原来那张 aaa8.jpg 是一颗眼球的大特写，
+                    4.8:1 的横幅里怎么裁都只能切一条眼白，所以换成这张横带）
      电脑壁纸 4K  3840x2160 横 → 压到 2560x1440 → chat-bg.webp（聊天页）
    要换图：把同名文件覆盖掉就行，下面这些规则不用动。
    （r118 上线瘦身：JPEG 全部转成 WebP，肉眼无差、体积只有原来三成左右。）
@@ -1671,7 +1687,7 @@ html.hb-chat-page #page { background-color: transparent !important; box-shadow: 
    .not-top-img，主题那条就整个失效，只剩我们这条在管。 */
 html.hb-ocean #page-header.post-bg {
   background-image: url('/img/post-top.webp');
-  background-position: center 46%;
+  background-position: center 50%;
   background-color: #0d3247;
 }
 html.hb-ocean #page-header.post-bg::before {
@@ -1766,7 +1782,7 @@ html.hb-ocean:not(.hero-mode) #footer {
     linear-gradient(180deg, rgba(6, 34, 52, .44) 0%, rgba(4, 22, 36, .72) 100%),
     url('/img/footer-ddd.webp');
   background-size: cover, cover;
-  background-position: center top, center 40%;
+  background-position: center top, center 52%;
   background-repeat: no-repeat, no-repeat;
   border-top: 1px solid rgba(150, 220, 250, .16);
 }
