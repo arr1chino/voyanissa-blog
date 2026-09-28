@@ -1666,7 +1666,7 @@ html.hb-chat-page #page { background-color: transparent !important; box-shadow: 
    素材（r133 重裁；原图在 work/img-tools/src/ 与桌面「沃壁纸」）：
      dddjpg.jpg   1440x2534 竖 → 逆时针转横 2534x1440 → 裁 (0,100,2534,1133)
                   → footer-ddd.webp 2400x1073（首页收尾页 + 子页页脚；整颗头都在带子里）
-     电脑壁纸 4K  3840x2160 横 → 裁 (0,280,3840,800) → post-top.webp 1920x400
+     电脑壁纸 4K  3840x2160 横 → 裁 (0,280,3840,800) → post-top.webp 2560x533
                   （文章页顶端。原来那张 aaa8.jpg 是一颗眼球的大特写，
                     4.8:1 的横幅里怎么裁都只能切一条眼白，所以换成这张横带）
      电脑壁纸 4K  3840x2160 横 → 压到 2560x1440 → chat-bg.webp（聊天页）
