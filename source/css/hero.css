@@ -215,13 +215,27 @@
 .hero-panel[data-index="5"] { left: 8vw; bottom: 16vh; }
 
 .hero-hint { position: absolute; left: 50%; bottom: 30px; transform: translateX(-50%); z-index: 8;
-  font-size: 12px; letter-spacing: .18em; color: #eaf9ff; opacity: .88;
+  font-size: 12px; letter-spacing: .18em; color: var(--hb-hint-color); opacity: .88;
   text-shadow: 0 1px 6px rgba(9,48,72,.55); }
+/* r144：「模型提供 miHoYo · 改造 观海子 · 仅作学习展示」这句话在站里出现两处 ——
+   首页右下角这行（.hero-credit），和黑色封底最底下那一行（#footer .kelo-legal，
+   那一行还并排着 © 和框架信息）——还有「向下滚动」那句 .hero-hint。
+   之前这三处各写各的字号 / 字色 / 影子：首页 11px + #e2f5ff@.72 一层影子，
+   封底 12px + rgba(224,243,255,.78) 两层影子，同一句话两种长相。
+   现在收进下面这三个变量，首页和封底都读同一套 —— 以后改一处，两处一起变。
+   （封底那行的排版一点没动，是首页这行对齐到它那套。） */
+:root {
+  --hb-legal-size: 12px;
+  --hb-legal-color: rgba(224, 243, 255, .78);
+  --hb-legal-shadow: 0 1px 2px rgba(3, 20, 32, .58), 0 0 12px rgba(3, 20, 32, .38);
+  --hb-hint-color: #eaf9ff;
+}
 /* r133：右下角那三颗圆钮（.hb-fabs，宽 38px + 右边距 22px）会压住这行
    「模型提供 miHoYo…」。所以整行往左挪到按钮之外：宽屏留 104px 空档，
    窄屏按钮是 44px 且更贴角，留 64px 就够，同时跟着按钮一起往下收。 */
-.hero-credit { position: absolute; right: 104px; bottom: 20px; z-index: 8; font-size: 11px; color: #e2f5ff; opacity: .72;
-  text-shadow: 0 1px 6px rgba(9,48,72,.55); }
+.hero-credit { position: absolute; right: 104px; bottom: 20px; z-index: 8;
+  font-size: var(--hb-legal-size); color: var(--hb-legal-color);
+  text-shadow: var(--hb-legal-shadow); }
 @media (max-width: 820px) { .hero-credit { right: 64px; bottom: 16px; } }
 
 /* ===== 窗口圆角：整站常驻的一圈边框 =====
@@ -733,8 +747,9 @@ body.hero-mode { background-color: transparent !important; }
   transition: color .5s ease, text-shadow .5s ease, background-color .5s ease; }
 .hero-deep #nav a, .hero-deep #nav .site-name, .hero-deep #nav .blog-info__title {
   color: #e8f5f8 !important; text-shadow: 0 1px 5px rgba(4,26,36,.55); }
-.hero-deep .hero-credit { color: #e4f6ff; opacity: .78; }
-.hero-deep .hero-hint { color: #eaf9ff; }
+/* 潜入深水之后整屏转深蓝，那两行字也跟着亮一档。这里只改自己身上那个变量，
+   不动 :root —— 封底那行压在照片上，配色得一直是上面那一套。 */
+.hero-deep .hero-credit { --hb-legal-color: rgba(228, 246, 255, .78); }
 .hero-deep .hero-vignette {
   background: radial-gradient(128% 98% at 50% 45%, rgba(0,0,0,0) 52%, rgba(28,104,140,.14) 100%); }
 .hero-deep .hero-panel-inner { --hb-card-a: .68; --hb-card-edge: .54; }
@@ -753,7 +768,11 @@ body.hero-mode { background-color: transparent !important; }
    跟上面 .hero-mode 那几条同权重，靠顺序压过去。 */
 .hero-fallback #nav a, .hero-fallback #nav .site-name, .hero-fallback #nav .blog-info__title {
   color: #2c3129 !important; text-shadow: 0 1px 3px rgba(255,255,255,.55); }
-.hero-fallback .hero-hint, .hero-fallback .hero-credit { color: #4c5a52; }
+/* 退回静态海报时首页那两行字要翻成深色（浅色字压在浅色海报上看不见）。
+   同样只改自己身上的变量：封底那行在照片上必须保持浅色，深色字压在树叶、
+   山体那几块会整片糊掉（上面 .kelo-footer 那段注释里有实测）。 */
+.hero-fallback .hero-credit { --hb-legal-color: #4c5a52; }
+.hero-fallback .hero-hint { --hb-hint-color: #4c5a52; }
 
 /* ============================================================
    Kelo 版式的收尾页 · 浅海配色
@@ -831,7 +850,9 @@ html.hero-mode #footer { margin-top: -15px !important; }
     rgba(3, 20, 34, .22) 100%); }
 .kelo-inner { position: relative; z-index: 10; }
 /* 浅色字在照片上最容易丢的地方是「亮天」那一块（白云、水面反光）。
-   这里给字垫一圈很淡的深色影子，亮底深底都兜得住；照片本身一个像素没动。 */
+   这里给字垫一圈很淡的深色影子，亮底深底都兜得住；照片本身一个像素没动。
+   r144：「模型提供」那行（.kelo-legal）从这一组里搬走了 —— 它明暗和首页
+   右下角那行共用同一个 --hb-legal-shadow（见上面 :root），值没变。 */
 #footer .kelo-logo,
 #footer .kelo-desc,
 #footer .kelo-social-label,
@@ -839,8 +860,7 @@ html.hero-mode #footer { margin-top: -15px !important; }
 #footer .kelo-col h2,
 #footer .kelo-col h3,
 #footer .kelo-col h4,
-#footer .kelo-col a,
-#footer .kelo-legal {
+#footer .kelo-col a {
   text-shadow: 0 1px 2px rgba(3, 20, 32, .58), 0 0 12px rgba(3, 20, 32, .38); }
 
 .kelo-top { display: flex; justify-content: space-between; align-items: flex-start;
@@ -900,8 +920,8 @@ html.hero-mode #footer { margin-top: -15px !important; }
    居中排的，右下角那三颗圆钮正好压在它尾巴上（实测压住 32px）。右边多留
    104px 空档把整行往左推，窄屏跟着按钮收到 62px。左边保持 60px 不动。 */
 .kelo-legal { position: relative; margin-top: 48px; padding: 0 104px 0 60px; display: flex; flex-wrap: wrap;
-  justify-content: center; gap: 8px 22px; font-size: 12px; line-height: 1.7;
-  color: rgba(224, 243, 255, .78); }
+  justify-content: center; gap: 8px 22px; font-size: var(--hb-legal-size); line-height: 1.7;
+  color: var(--hb-legal-color); text-shadow: var(--hb-legal-shadow); }
 @media (max-width: 820px) { #footer .kelo-legal { padding-right: 62px; } }
 /* 原来这里垫了一小块很淡的白（深色字版本用来把它从照片里托出来）。
    字翻成浅色之后，白底反而会把字吃掉，所以撤掉 —— 现在靠字自己那圈深色影子。 */
@@ -1742,12 +1762,24 @@ html.hb-ocean #page-header.post-bg::before {
    ::before：z-index:-2 让它落在页面所有内容下面，但仍在 html 自己那层底色之上。
 
    r128 改版：原来 blur(13px) 把壁纸糊得认不出是张图（用户反馈「背景呢」）。
-   现在只留 3px 柔化，缩放比也拉回几乎 1:1 —— 壁纸能看清脸和花，
+   当时只留 3px 柔化，缩放比也拉回几乎 1:1 —— 壁纸能看清脸和花，
    聊天窗自己那层 backdrop-filter: blur(20px) 继续提供磨砂玻璃质感。
-   inset 从 -8vmax 收到 -10px：只为了 3px 的模糊不吃出透明边，顺手把
+   r144：3px 还是被点出来「磨砂玻璃那块糊得比较重」，再降到 .5px ——
+   只剩抗锯齿级别的柔化，脸、花、水波都是实的；磨砂质感交给聊天窗那层
+   backdrop-filter，不靠把整张图糊掉来凑。
+   inset 从 -8vmax 收到 -10px：只为了那点柔化不吃出透明边，顺手把
    「元素被撑大 → 图被放大 → 发虚」这个副作用一起去掉了。
    水色罩子也调淡（深色 .30→.48，浅色 .10→.22），整体更接近浅海蓝。
    底图同时从 1280x720 换成 2560x1440，不再欠采样。
+
+   站位（r144）：底图里沃雅妮莎是偏右站的，原样铺上去她的下半张脸正好压在
+   聊天窗左边缘后面（用户反馈「脸被玻璃挡住」）。
+   这里不能用 background-position 的百分比去挪 —— 这张 2560x1440 的图在宽屏上
+   正好按「宽度铺满」来 cover（2560x941 下水平方向一点余量都没有，挪不动），
+   1920x1080 / 1440x900 下最多也只能挪 16 / 176 像素，看不出差别。
+   所以改成给这一层加 transform：先整体放大 16%（顺手把平移让出来的那边顶到
+   画面外，不留空边），再往右推 6%。实测 2560x941 / 1920x1080 / 1440x900
+   三个视口，双眼、鼻、嘴都在玻璃右侧露着，玻璃里的文字也没被挡。
 
    上面那层渐变（--hbc-veil）和照片一起被 blur 吃进去，等于「先给照片垫一层
    水色再模糊」，白天是浅水、黑天是深海。
@@ -1773,7 +1805,18 @@ html.hb-chat-page::before {
   background-size: cover, cover;
   background-position: center 22%, center 22%;
   background-repeat: no-repeat, no-repeat;
-  filter: blur(3px) saturate(108%);
+  filter: blur(.5px) saturate(108%);
+  transform: translateX(6%) scale(1.16);
+}
+/* 窄一点的屏（笔记本那种比例）横向还有余量可挪：1600x900 以上是 16:9，
+   图按「高度铺满」cover 会多出 100~180px，锚点从居中改成贴左（0%），
+   人物就再往右让开聊天窗左边缘一点 —— 1280x800 / 1440x900 实测脸和嘴
+   都在玻璃右侧。2560x941 这种超宽比横向一点余量都没有（图宽 = 元素宽），
+   background-position 完全失效，所以这条只挂在 ≤2048px，宽屏走上面的
+   transform 就够了。手机（<1100px）不挂：竖屏下横向余量大得多，锚点贴左
+   会把人物推出画外，现在这个居中值更好看。 */
+@media (min-width: 1100px) and (max-width: 2048px) {
+  html.hb-chat-page::before { background-position: 0% 22%, 0% 22%; }
 }
 /* 页面大标题取的是 var(--text-highlight-color)（黑天是浅色），直接压在亮色壁纸上
    容易糊，补一层同向阴影把字从照片里拎出来；白天反过来用白色辉光。 */
