@@ -11,6 +11,8 @@ html(lang=config.language data-theme=theme.display_mode class=htmlClassHideAside
     include ./head.pug
   body
     !=partial('includes/loading/index', {}, {cache: true})
+    if page.layout !== 'hero'
+      !=partial('includes/loading/brand-loader', {}, {cache: true})
 
     if theme.background
       if !Array.isArray(theme.background)

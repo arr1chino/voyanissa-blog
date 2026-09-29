@@ -1092,8 +1092,15 @@ inject:
     #   它和首屏文字几乎同时出现。
     #   「About Me」那行手写体（Caveat 700）同理：字体是「用到才去下」的，
     #   等那句艺术字开始排版才发请求就太晚了，先预下。
+    #   r140：three.js 那一坨（vendor 下四个文件，合计 750KB 左右）原来要等
+    #   hero.js 下完、解析完、认出 `import ... from 'three'`、再查 importmap
+    #   之后才开始下载 —— 白白多等一整个来回。用 modulepreload 在第一行
+    #   就把它们跟 CSS 一起发出去，3D 那块能早半秒到一秒起跑。
+    #   这里必须用 modulepreload（不是 preload）：只有它认 importmap、
+    #   并且会把结果直接塞进模块表，hero.js 后面 import 时命中同一份，
+    #   不会重复下一遍。
     #   只在首页发（其它页面根本没有 3D / 艺术字，没必要陪跑这几个 MB）。
-    - "<script>(function(){var p=location.pathname;if(p!=='/'&&p!=='/index.html')return;function L(a,o){var l=document.createElement('link');l.rel='preload';l.as=a;for(var k in o){l[k]=o[k];}document.head.appendChild(l);}L('fetch',{crossOrigin:'anonymous',href:'/assets/model.glb'});L('image',{fetchPriority:'high',href:'/img/loader-poster.webp'});L('font',{type:'font/woff2',crossOrigin:'anonymous',href:'/fonts/caveat-700.woff2'});L('font',{type:'font/woff2',crossOrigin:'anonymous',href:'/fonts/caveat-400.woff2'});})();</script>"
+    - "<script>(function(){var p=location.pathname;if(p!=='/'&&p!=='/index.html')return;function L(a,o){var l=document.createElement('link');l.rel=a;for(var k in o){l[k]=o[k];}document.head.appendChild(l);}function P(a,o){var l=document.createElement('link');l.rel='preload';l.as=a;for(var k in o){l[k]=o[k];}document.head.appendChild(l);}L('modulepreload',{href:'/vendor/three.module.js'});L('modulepreload',{href:'/vendor/loaders/GLTFLoader.js'});L('modulepreload',{href:'/vendor/libs/meshopt_decoder.module.js'});L('modulepreload',{href:'/vendor/utils/BufferGeometryUtils.js'});P('fetch',{crossOrigin:'anonymous',href:'/assets/model.glb'});P('image',{fetchPriority:'high',href:'/img/loader-poster.webp'});P('font',{type:'font/woff2',crossOrigin:'anonymous',href:'/fonts/caveat-700.woff2'});P('font',{type:'font/woff2',crossOrigin:'anonymous',href:'/fonts/caveat-400.woff2'});})();</script>"
     # 聊天页（/chat/）要单独收拾两处（藏掉那条蓝页脚、把外面那圈卡片框去掉），
     # 这页的 body 上什么都没有、认不出是哪一页，所以在 <head> 里就往 <html> 上打个记号。
     # 放在这里（而不是那页正文里的 <script>）是因为要赶在第一帧之前打上，

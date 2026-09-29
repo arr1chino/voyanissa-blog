@@ -942,6 +942,65 @@ function resize() {
   if (skyMat) skyMat.uniforms.uAspect.value = Math.max(0.6, w / Math.max(1, h));
 }
 
+/* 把当前这一轮让出去，交给浏览器刷一帧（宏任务，不是微任务 ——
+   微任务还是在同一个任务里跑完，等于没让）。 */
+const yieldFrame = () => new Promise((r) => setTimeout(r, 0));
+
+/* 着色器预热分几片。不是越多越好：每一片都要重新遍历一遍场景、
+   再走一遍 program 缓存的查找，切太碎反而多花时间。 */
+const SHADER_SLICES = 6;
+
+/* 着色器预热（分片版）。
+   原来这里是 renderer.compileAsync()。它名不副实：内部是先同步跑一遍
+   compile() 把 8 个 program 现编出来（这一步才是真正卡住主线程的那一下，
+   冷机实测 1.7 秒、驱动着色器缓存热着也要 0.8 秒），然后才去轮询
+   「编好了没」。也就是说，那一整段主线程长任务躲不掉。
+
+   这段长任务伤在两处：除了页面僵住，还连累加载页 —— 这 0.8~1.7 秒里
+   ANGLE 正把着色器翻成 HLSL 交给显卡驱动编，GPU 进程被占满，加载页那条
+   水环的合成帧率实测掉到 7fps 左右，观感就是「刚进来这几秒帧数特别低」。
+
+   所以这里自己分片：
+     ① program 是按材质缓存的（编过一次，第二次直接命中）。
+     ② compile() 遍历场景取材质时**不看 visible**，所以「藏起一半网格」
+        没用，得直接把这些网格的 material 摘成 null（它读 material 时
+        判空跳过），编完立刻装回去。
+     ③ 于是每片只新增编一小批 program，片与片之间让出一帧 —— 合成器
+        有机会把水环推上去，总开销一分没少，但从「一口气冻 1.7 秒」
+        摊成了「几次冻两三百毫秒」。
+   摘材质到装回去是同步做完的，中间不让帧：万一让帧的时候正好撞上
+   renderer.render()，它会去读 material.visible 而炸掉。
+
+   r141 试过的两条「更进一步」都更慢，记在这儿免得下次再踩：
+     · 真画一帧（画进 64×64 的 render target 逼驱动编译）：program 的缓存键
+       里带着输出色彩空间，画到 render target 走线性、画到画布走 sRGB，
+       算出来是两套 program —— 实测 program 数 8 → 16，真身一个都没预热到。
+     · 真画到画布上、用 scissor 压到 64×64：program 数对了，但实测总阻塞
+       1964ms（本版 1064ms）—— 第一次 renderer.render() 本身就压着一堆
+       一次性的 GL 初始化，摊不开。所以这一版保留「只 compile、不 draw」。
+
+   兜底：任何一步出错只跳过预热，回到「第一帧现编」的老路 ——
+   绝不能因为编译出问题就把整页退成静态海报（那是外层 .catch 的活儿）。 */
+async function warmShaders(slices) {
+  const targets = [];
+  scene.traverse((o) => { if (o.material && (o.isMesh || o.isLine || o.isPoints || o.isSprite)) targets.push(o); });
+  if (!targets.length) { try { renderer.compile(scene, camera); } catch (e) {} return; }
+  const n = Math.max(1, Math.min(slices || 1, targets.length));
+  const per = Math.ceil(targets.length / n);
+  const saved = new Array(targets.length);
+  for (let i = 0; i < n; i++) {
+    const upto = Math.min(targets.length, (i + 1) * per);
+    for (let k = upto; k < targets.length; k++) { saved[k] = targets[k].material; targets[k].material = null; }
+    try { renderer.compile(scene, camera); } catch (e) {} finally {
+      for (let k = upto; k < targets.length; k++) { targets[k].material = saved[k]; saved[k] = null; }
+    }
+    /* 探针：每片结束记一个时间戳（同 __heroPerf.phases 其它几笔），
+       用来判断「时间到底摊开了没有、还是全砸在某一两个 program 上」。 */
+    if (window.__heroPerf) window.__heroPerf.phases.push(['warm' + i, Math.round(performance.now())]);
+    if (i + 1 < n) await yieldFrame();
+  }
+}
+
 /* 一帧只量一次 hero-scroll 的位置，分镜进度和退场淡出都用它 ——
    同一帧里量两遍只会多一次强制重排。 */
 function heroMetrics() {
@@ -956,6 +1015,8 @@ function scrollProgress(m) {
 }
 
 let last = performance.now();
+/* 「只画海」那一支的节流时间戳，见下面 frame() 里 else 那一支和 r140 的说明。 */
+let lastSky = 0;
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
   if (lenis) lenis.raf(now);
@@ -1028,10 +1089,27 @@ function frame(now) {
     const breathe = Math.sin(now * 0.0011) * 0.004 + Math.sin(now * 0.0007 + 1.7) * 0.0025;
     Object.values(ACTORS).forEach((a) => { a.model.position.y = breathe; });
 
+    /* 第一次真正把海画出来的这一帧，顺手把遮罩里那层兜底黑底撤掉
+       （上面「只画海」那一支现在要等到退场才跑，这条得在这儿补上）。 */
+    markSkyLive();
     renderer.render(scene, camera);
   } else if (renderer && skyMat) {
-    /* 模型还在路上：先把海画出来顶着（见下面 renderSkyOnly 的说明）。
-       这一支跑的时候 ready 还是 false，所以相机、眨眼、分镜全都不用算。 */
+    /* 模型还在路上：先把海画出来顶着（见下面 renderSkyOnly 的说明）——
+       这样遮罩淡出时底下已经是一片正在流的水，接缝对得干干净净。
+       这一支跑的时候 ready 还是 false，相机、眨眼、分镜全都不用算。
+
+       r141：遮罩还盖着的时候，这一支一帧都不画。
+       遮罩自己带一层不透明的纯黑底（.hero-loader 的 background:#000），
+       海被它从头到脚盖住 —— 这几十帧本来就是白画的。代价却不小：这段时间
+       正是显卡在编那 8 个着色器 program 的时候（本机实测一口气占 1.7 秒），
+       再往上压一整屏的全屏片元着色器，等于跟加载页那条水环抢同一块 GPU，
+       水环当场掉到 5~9fps —— 这就是「刚进来那几秒帧数特别低」的由来。
+       现在等 hideLoader 把退场开起来（loaderLeaving）才恢复画海：淡出有
+       0.8 秒，第一帧海在 16 毫秒内就补上，肉眼看不出空档。
+       （早先那版限到 30fps 是同一个思路，只是让得太少，这回直接全让出去。） */
+    if (!loaderLeaving) { requestAnimationFrame(frame); return; }
+    if (now - lastSky < 33) { requestAnimationFrame(frame); return; }
+    lastSky = now;
     renderSkyOnly(now);
     markSkyLive();
   }
@@ -1076,10 +1154,25 @@ function markSkyLive() {
 
 /* 加载遮罩收场：加一个类让它整层淡出去（动画写在 hero.css），
    淡完再把节点摘掉 —— 留着它虽然看不见，但会一直挡着点击。
-   重复调用安全：已经淡出去过就直接返回。 */
+   重复调用安全：已经淡出去过就直接返回。
+
+   还有一个「最短展示时长」（从 boot() 那一刻起算）。以前是「模型一就绪就撤」，
+   本机实测 2.6 秒就收场了 —— 可那条水环素材这时才刚转起来，淡出时画面
+   还停在静态海报上，等于铺了个寂寞。留够 1.4 秒，让「水环真的在转」
+   这件事被看见；下面 5s / 12s 两个兜底定时器不受影响，超时该放行还是放行。 */
+const MIN_LOADER_MS = 1400;
+let loaderAt = 0;
+/* r141：遮罩「正在退场」的记号。
+   在它翻上来之前，加载遮罩是一整块不透明的黑（.hero-loader 自己的
+   background:#000），底下那片海一点都露不出来 —— 所以那段时间画海是纯浪费，
+   见下面 frame() 里 else 那一支的说明。 */
+let loaderLeaving = false;
 function hideLoader() {
+  loaderLeaving = true;
   const el = document.getElementById('hero-loader');
   if (!el || el.classList.contains('is-done')) return;
+  const wait = MIN_LOADER_MS - (performance.now() - loaderAt);
+  if (wait > 0) { setTimeout(hideLoader, wait); return; }
   el.classList.add('is-done');
   /* 加载页那条水环素材（.hero-loader-video，见 hero.pug）跟着遮罩一起淡出；
      淡完顺手把它暂停 —— 留着它继续解码只是白白烧电。 */
@@ -1169,6 +1262,7 @@ function initCardReveal() {
 }
 
 function boot() {
+  loaderAt = performance.now();
   initNavSkin();
   initCardReveal();
   /* 兜底：不管下面是正常出模型、还是画不出来退成静态海报，
@@ -1222,12 +1316,28 @@ function boot() {
     }, undefined, reject);
   }));
 
+  /* 模型解析完到「能画」之间还压着三小段活：量尺寸、搭眼珠、预编译着色器。
+     它们原来全在同一个任务里跑完，等于把这一帧堵死一秒多 —— 加载页那条水环
+     是独立解码的，照样在转，但页面其余那部分合成会僵住。
+     这里用 setTimeout(0) 把它们分到相邻的几帧上，中间至少给浏览器留出
+     刷一次合成的机会。分帧本身不减少总开销，只是让卡顿不至于连成一整块。 */
+  const breathe = () => new Promise((r) => setTimeout(r, 0));
   Promise.all(jobs).then(() => {
     measure();
     mark('measure');
+    return breathe();
+  }).then(() => {
     buildEyeRig();
     mark('eye-rig');
     resize();
+    return breathe();
+  }).then(() => {
+    /* 着色器预热。详见上面 warmShaders() 那段注释：
+       这一步本来就要花 0.8~1.7 秒（冷机更长），原来一口气跑完 ——
+       主线程冻一整块、加载页也跟着掉到 7fps。现在切成 6 片，
+       片间让帧，观感从「进来卡死一秒多」变成「零星几下小顿」。 */
+    return warmShaders(SHADER_SLICES);
+  }).then(() => {
     ready = true;
     mark('ready');
     /* 等真正画出一帧带角色的画面再撤遮罩：ready 只是「数据齐了」，

@@ -86,7 +86,15 @@ hexo.extend.filter.register('after_generate', function () {
         if (out.error) throw out.error;
         if (out.code) writeOut(hexo, rel, src, out.code);
       }).catch(function (e) {
-        hexo.log.warn('optimize: %s 压缩失败，已按原文发布（%s）', rel, e.message);
+        /* 一定要把行号打出来。terser 的报错原文只有一句 "Unexpected character '（'"，
+           没有位置 —— r140 就吃了这个亏：hero.js 里有个中文全角括号漏在注释外面，
+           解析当场失败，构建却只是一声不吭地把 72KB 的原文照发（而压缩后只有 23KB），
+           页面上看不出来，只有加载页白白多下 50KB。日志里带上 line/col，
+           下次一眼就能定位。 */
+        const where = (e && typeof e.line === 'number')
+          ? ' @' + rel + ':' + e.line + ':' + (e.col || 0)
+          : '';
+        hexo.log.warn('optimize: %s 压缩失败，已按原文发布（%s%s）', rel, e.message, where);
       });
     });
   }, Promise.resolve());

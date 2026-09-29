@@ -47,6 +47,34 @@
     rgba(0,0,0,.09) 50%, rgba(0,0,0,0) 78%); }
 .hero-poster { position: absolute; inset: 0; background-size: cover; background-position: center 30%; display: none; }
 
+/* ===== 按掉主题自带的入场动画（「进来糊成一片」的病根，r140）======
+   Butterfly 在 index.css 里给 #content-inner 和 #footer 挂了一条
+   `animation: bottom-top 1s`（从 translateY(35px) 滑到 0）。伤在两处：
+
+   1) CSS 里只要元素身上挂着 transform，它就是所有 position:fixed 后代的
+      「包含块」。首屏那层加载遮罩 .hero-loader 是 fixed + inset:0，本该钉在
+      视口上；被这么一框，它改成相对 #content-inner 定位 —— 而 #content-inner
+      被分镜的 500vh 撑到 6000 多像素高，遮罩就跟着变成 1440×6022：
+      里面的水环被拉到 1152×4818、下面两行字被 flex-end 推到 5900px 处，
+      屏幕里只剩一片放大的糊。实测这个错误布局持续了约 1.9 秒，动画一结束
+      又整个「啪」地弹回正确位置，二次伤害。
+   2) 整页 6000px 带着 opacity 逐帧重绘一秒，首屏帧率被压到 7~21fps
+      （rAF 最大间隔 2.3 秒）。
+
+   首页整屏本来就被加载遮罩盖着、子页面现在也有同款遮罩，这点上浮入场根本
+   看不见，砍掉零损失。（.hero-frame / .hero-flow 也是 fixed，同样被这条
+   动画连累过，一并回正。） */
+#content-inner, #footer { animation: none !important; transform: none !important; }
+
+/* 主题还给 canvas 挂了一条 `animation: to_show 4s`（opacity 0→1）。
+   它没认出首页这块 .hero-canvas 不是它自己那层背景画布，于是 3D 画面
+   进来要花 4 秒才从透明浮到不透明（遮罩淡出那会儿人还是半透明的），
+   而且这 4 秒里每一帧都在重绘整屏。这里按掉：画布什么时候露面，由加载
+   遮罩那 0.8 秒的淡出决定，比它这条 4 秒幽灵淡入干净得多。
+   will-change: opacity 是让画布常驻一层自己的合成层，之后改不透明度
+   不再重绘整页。 */
+.hero-canvas { animation: none !important; will-change: opacity; }
+
 /* ===== 首屏加载遮罩 =====
    3D 模型要在浏览器里解析一段时间（几百毫秒到一两秒，看网速和机器）。
    这段时间以前就是「进来先看见一片空海，人过一会儿才浮出来」，所以有了这一层 ——
@@ -60,6 +88,10 @@
   display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
   padding-bottom: 9vh; background: #000;
   transition: opacity .8s cubic-bezier(.22,.61,.36,1), visibility .8s; }
+/* 整层交给合成器单独管一层：模型解析 / 着色器编译那段时间主线程是堵死的，
+   只有不透明度、transform 这两种属性能在那段时间里继续动，所以加载页的
+   进出场只允许用这两个（下面的淡出也是）。 */
+.hero-loader { will-change: opacity; }
 /* 加载中还挡住底下的点击，免得点穿到看不见的导航 / 卡片上去 */
 .hero-loader.is-done { opacity: 0; visibility: hidden; pointer-events: none; }
 /* 兜底底色。以前这层是常驻的，还按量出来的色标去凑海的颜色 —— 问题是海里那条

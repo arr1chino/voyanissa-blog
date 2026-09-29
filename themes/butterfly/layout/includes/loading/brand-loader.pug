@@ -1,0 +1,73 @@
+//- ===== 子页面（文章 / 日历 / 和沃聊天…）的加载页（r140）=====
+//- 首页那层加载遮罩（themes/butterfly/layout/hero.pug 里的 .hero-loader）已经
+//- 是站点的门面了，可它只长在首页上：从首页点进一篇博客，浏览器要重新下一遍
+//- HTML / CSS / JS，那零点几秒里看到的是一张还没上色的半成品页面。
+//- 这里给子页面铺一层一模一样的 —— 同一张海报、同一段水环、同样两行字，
+//- 换页时不会「一会儿有遮罩一会儿没有」。样式全部复用 hero.css 里
+//- .hero-loader 那一族（类名照抄），所以这里不用再写一条 CSS。
+//- 位置：挂在 includes/layout.pug 的 body 最开头，也就是 #body-wrap 外面 ——
+//- 必须这样，#content-inner 那条主题入场动画会把 fixed 后代的包含块改掉
+//- （首页那个 bug 就是这么来的，见 hero.css 顶上那段注释）。
+#hero-loader.hero-loader(aria-hidden='true')
+  .hero-loader-veil
+  img.hero-loader-poster(
+    src='/img/loader-poster.webp' alt='' aria-hidden='true'
+    fetchpriority='high' decoding='async')
+  video.hero-loader-video(
+    autoplay='' muted='' loop='' playsinline='' preload='auto'
+    poster='/img/loader-poster.webp' aria-hidden='true' tabindex='-1')
+    source(src='/img/loader-ring.mp4' type='video/mp4')
+  p.hero-loader-title 沃雅妮莎
+  p.hero-loader-sub 正在浮出水面…
+script.
+  (() => {
+    const el = document.getElementById('hero-loader')
+    if (!el) return
+    /* 子页面没有 3D 要等，遮罩挡的只是「浏览器把这一页画出来」那一小段。
+       所以给一个短得多的最短展示时长（首页那边是 1.4 秒，要等模型和着色器）：
+       0.55 秒只是为了让水环不至于「闪一下就没了」，再长就是白白拖慢翻页。 */
+    const MIN = 550
+    /* 撤遮罩的时机是「页面能看了」，不是「所有东西都下完了」。
+       原来挂在 window 的 load 上 —— 而这一页自己就带着那条 957KB 的水环视频
+       （preload=auto + autoplay），load 得等它整个下完才肯触发。慢网下
+       「这一页已经能看了」和「load 终于来了」之间能差好几秒，那几秒访客
+       盯着的是一层盖住好内容的遮罩。现在改成 DOMContentLoaded：HTML 到位、
+       CSS 生效、脚本可以跑，画面就立得住，这时撤；视频没下完就让它下它的，
+       900 毫秒后连同这一层一起摘掉。 */
+    const CAP = 1500        // DCL 之后再等这么久就无条件撤（等图片/字体收尾）
+    const t0 = Date.now()
+    let done = false
+    const finish = () => {
+      if (done) return
+      done = true
+      const wait = Math.max(0, MIN - (Date.now() - t0))
+      setTimeout(() => {
+        el.classList.add('is-done')
+        const v = el.querySelector('.hero-loader-video')
+        if (v) setTimeout(() => { try { v.pause() } catch (e) {} }, 900)
+        setTimeout(() => el.remove(), 900)
+      }, wait)
+    }
+    /* 真正的触发有两条，取先到的那个：
+         ① load 来了就撤（快网下就是这样，图片/字体都齐了，画面最完整）；
+         ② load 迟迟不来时，DCL 之后再等 CAP 就撤 —— 这条是上限，
+            专门治「Load 事件被那条视频拖着」的慢网。
+       两条都绕不过上面那个 MIN（finish 里自己会等）。 */
+    const arm = () => setTimeout(finish, CAP)
+    if (document.readyState === 'complete') {
+      finish()
+    } else {
+      window.addEventListener('load', finish, { once: true })
+      if (document.readyState === 'loading') {
+        window.addEventListener('DOMContentLoaded', arm, { once: true })
+      } else {
+        arm()
+      }
+    }
+    /* 兜底：DCL 一直不来（脚本被卡住等）时，最多挡 4 秒。 */
+    setTimeout(finish, 4000)
+    /* 从上一页「后退」回来（bfcache 内存快照）时这一层是死的，直接摘掉。 */
+    window.addEventListener('pageshow', (e) => {
+      if (e.persisted) { done = true; el.remove() }
+    })
+  })()

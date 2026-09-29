@@ -245,12 +245,51 @@ block content
   //- 只挂在首页，文章页/归档页还是浏览器原生滚动。
   script(src='/js/lenis.min.js')
   script(type='module', src='/js/hero.js')
-  //- 网易云的曲子清单（从公开接口取回、逐首验过能放的），要排在挂件脚本前面
-  script(src='/js/hb-songs.js')
-  //- 首页右栏那两个小挂件：今日一言（hitokoto）+ 每日三首（网易云外链）
-  script(src='/js/hb-widgets.js')
-  //- 定位天气小卡片
-  script(src='/js/hb-weather.js')
-  //- 侧栏那张「本月日程」小日历：节日数据在前，画格子的在后
-  script(src='/js/hb-holidays.js')
-  script(src='/js/hb-minical.js')
+  //- r141：这几条挂件脚本从「文档流里同步执行」改成「加载页开始退场之后再插进来」。
+  //- 它们和首屏那 1~2 秒完全无关 —— 那段时间主线程在解析 model.glb（1.6MB）、
+  //- 编着色器，带宽也在下模型；这五条（曲子清单 31KB + 挂件 9KB + 天气 5KB
+  //- + 节日 4KB + 小日历 3KB）排在文档流里同步执行，等于跟模型抢同一段主线程、
+  //- 同一根网线，白占首屏最紧的那几百毫秒。
+  //- 它们本来就是「DOM 就绪就跑」的自执行脚本，晚一点执行行为一模一样；
+  //- 每张卡上都有占位文案（正在挑歌… / 正在定位…），空着这段时间看不出来。
+  //- 顺序照旧保留：曲子清单要在挂件前、节日数据要在小日历前（动态插入 +
+  //- async=false 就是按插入顺序执行的）。
+  script.
+    (() => {
+      const files = [
+        '/js/hb-songs.js',      // 网易云曲子清单（挂件要用）
+        '/js/hb-widgets.js',    // 友情链接 + 今日一言 + 每日三首
+        '/js/hb-weather.js',    // 定位天气
+        '/js/hb-holidays.js',   // 节日数据（小日历要用）
+        '/js/hb-minical.js',    // 本月日程小日历
+      ]
+      let fired = false
+      const start = () => {
+        if (fired) return
+        fired = true
+        let i = 0
+        const next = () => {
+          if (i >= files.length) return
+          const s = document.createElement('script')
+          s.src = files[i++]
+          s.async = false
+          s.onload = next
+          s.onerror = next
+          document.head.appendChild(s)
+        }
+        next()
+      }
+      /* 触发的时机挑「加载遮罩开始退场」（#hero-loader 加上 is-done）——
+         那一刻 3D 已经就绪、不再需要抢主线程了。 */
+      const hold = document.getElementById('hero-loader')
+      if (hold) {
+        if (hold.classList.contains('is-done')) start()
+        else new MutationObserver((_, ob) => {
+          if (hold.classList.contains('is-done')) { ob.disconnect(); start() }
+        }).observe(hold, { attributes: true, attributeFilter: ['class'] })
+      } else {
+        start()
+      }
+      /* 兜底：遮罩一直不退（3D 直接挂了、走了静态海报那条路）时也得把挂件放出来。 */
+      setTimeout(start, 6000)
+    })()
