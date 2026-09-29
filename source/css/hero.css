@@ -110,21 +110,25 @@
    排在 video 下面（z-index 1 < 2），video 一播出真帧就被盖住，画面没变化。 */
 .hero-loader-poster { position: absolute; inset: 0; z-index: 1;
   width: 100%; height: 100%; object-fit: contain;
-  transform: scale(.8); transform-origin: 50% 46%; pointer-events: none; }
+  transform: scale(.4); transform-origin: 50% 50%; pointer-events: none; }
 /* 加载页那条水环素材：整帧铺满，object-fit: contain —— 素材是正方形的，
    四周那一圈黑就是画面本身的黑，屏幕上多出来的黑边跟它一模一样，
    所以不管窗口多宽多窄都不会被裁掉，也不用去凑边的颜色。
-   scale(.8) 是把它收进来一点：既不顶到屏幕边，也给底下那两行字让出位置。 */
+   scale(.4) 是把这圈水环缩到素材尺寸的一半（r145）：先前的 .8 让环快顶到屏幕边，
+   太大。缩放中心一并从 50% 46% 挪到正中间的 50% 50%（也是环自己圆心所在），
+   于是缩的是「原地」的那一下 —— 圆心纹丝不动，不会因为缩放而上下飘。 */
 .hero-loader-video { position: absolute; inset: 0; z-index: 2;
   width: 100%; height: 100%; object-fit: contain;
-  transform: scale(.8); transform-origin: 50% 46%; pointer-events: none; }
+  transform: scale(.4); transform-origin: 50% 50%; pointer-events: none; }
 /* 竖屏（手机）：contain 会把正方形素材缩成「屏幕宽度」那么大，水环只剩中间一小团，
    上下全是黑，空得厉害。这里换成 cover —— 素材铺满屏幕高度、左右溢出裁掉，
-   水环正好撑满宽度。裁掉的左右两侧本来就是素材自己的黑底，跟加载页底色一样，
-   看不出接缝；缩放收到 .92 是为了不顶到屏幕两边。 */
+   裁掉的左右两侧本来就是素材自己的黑底，跟加载页底色一样，看不出接缝。 */
+/* 缩放同样是「上一版的一半」（.92 → .46，r145）：手机普遍是 2.2 左右的长宽比，
+   cover 之后正方形边长等于屏高，再乘 .46 差不多正好是屏宽 —— 于是整圈水环完整
+   落在屏幕里，左右各留一点黑，跟桌面端缩完之后的观感对得上。 */
 @media (max-aspect-ratio: 1/1) {
   .hero-loader-video,
-  .hero-loader-poster { object-fit: cover; transform: scale(.92); }
+  .hero-loader-poster { object-fit: cover; transform: scale(.46); }
 }
 
 /* 底下那两行字：背景是黑底加一圈发光，字得比原来更「轻」一点才不抢戏，

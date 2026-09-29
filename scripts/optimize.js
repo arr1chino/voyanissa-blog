@@ -47,16 +47,37 @@ hexo.extend.filter.register('after_generate', function () {
   const CleanCSS = require('clean-css');
   const cleaner = new CleanCSS({ level: { 1: { all: true } }, rebase: false, returnPromise: false });
 
-  CSS_FILES.forEach(function (rel) {
-    const src = readIf(path.join(hexo.public_dir, rel));
-    if (src === null) return;
+  /* hexo 把文件写进 public 是异步的，偶尔这次 filter 已经压完写回去了、
+     那一边原始 CSS 才刚落地，产物当场又被盖回未压缩的原文 —— r145 实测
+     撞上过（同一份源码，跑两遍得到 126KB 和 60KB 两种结果）。所以压完不是
+     就完事：隔一会儿回头核一遍，发现被盖回去就再写一次。延迟的空档也让
+     hexo 那边把没写完的文件都写完，最后一次落笔的一定是压缩版。 */
+  function minifyCss(rel) {
+    const target = path.join(hexo.public_dir, rel);
+    const src = readIf(target);
+    if (src === null) return null;
+    const out = cleaner.minify(src);
+    if (out.errors && out.errors.length) throw new Error(out.errors.join(' / '));
+    if (!out.styles) return null;
+    writeOut(hexo, rel, src, out.styles);
+    return { target: target, styles: out.styles };
+  }
+
+  const cssChain = CSS_FILES.map(function (rel) {
+    let done = null;
     try {
-      const out = cleaner.minify(src);
-      if (out.errors && out.errors.length) throw new Error(out.errors.join(' / '));
-      if (out.styles) writeOut(hexo, rel, src, out.styles);
+      done = minifyCss(rel);
     } catch (e) {
       hexo.log.warn('optimize: %s 压缩失败，已按原文发布（%s）', rel, e.message);
     }
+    if (!done) return Promise.resolve();
+    return new Promise(function (r) { setTimeout(r, 1200); }).then(function () {
+      const now = readIf(done.target);
+      if (now !== null && now !== done.styles) {
+        fs.writeFileSync(done.target, done.styles);
+        hexo.log.info('optimize: %s 刚被原始文件盖了一下，已重新写回压缩版', rel);
+      }
+    });
   });
 
   const terser = require('terser');
@@ -65,7 +86,7 @@ hexo.extend.filter.register('after_generate', function () {
   try { names = fs.readdirSync(jsDir).filter((n) => /\.js$/i.test(n) && !/\.min\.js$/i.test(n)); }
   catch (e) { names = []; }
 
-  return names.reduce(function (chain, name) {
+  const jsChain = names.reduce(function (chain, name) {
     return chain.then(function () {
       const rel = 'js/' + name;
       const src = readIf(path.join(jsDir, name));
@@ -98,4 +119,6 @@ hexo.extend.filter.register('after_generate', function () {
       });
     });
   }, Promise.resolve());
+
+  return Promise.all(cssChain).then(function () { return jsChain; });
 });
