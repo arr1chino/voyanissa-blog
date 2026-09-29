@@ -2,6 +2,8 @@
 title: 个人作品集正式上线
 date: 2026-08-09 12:00:00
 updated: 2026-08-09 12:00:00
+cover: /img/post-portfolio-cover.webp
+top_img: /img/post-top.webp
 ---
 作品集地址：[shiq.me](https://shiq.me)
 

@@ -2,6 +2,8 @@
 title: 新模块：和沃聊天
 date: 2026-09-27 10:00:00
 updated: 2026-09-27 10:00:00
+cover: /img/post-chat-cover.webp
+top_img: /img/post-top.webp
 categories:
   - 网站更新
 tags:

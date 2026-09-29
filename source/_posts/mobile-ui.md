@@ -2,6 +2,8 @@
 title: 博客全面适配移动端
 date: 2026-09-29 18:30:00
 updated: 2026-09-29 18:30:00
+cover: /img/post-mobile-cover.webp
+top_img: /img/post-top.webp
 categories:
   - 网站更新
 tags:

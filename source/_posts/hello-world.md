@@ -1,6 +1,8 @@
 ---
 title: Hello World
 date: 2026-09-26 12:00:00
+cover: /img/post-hello-cover.webp
+top_img: /img/post-top.webp
 ---
 9月26日，沃雅妮莎博客正式上线
 
