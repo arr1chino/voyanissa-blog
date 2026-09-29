@@ -2,6 +2,8 @@
 title: 写了一个 PS 插件，用来桥接 PS 和第三方生图模型
 date: 2026-09-29 21:00:00
 updated: 2026-09-29 21:00:00
+cover: /img/post-ps-cover.webp
+top_img: /img/post-top.webp
 categories:
   - 作品
 tags:
