@@ -1965,3 +1965,249 @@ html.hb-ocean:not(.hero-mode) #footer .footer-other { background-color: transpar
   .hb-cal-item-what { white-space: normal; display: -webkit-box;
     -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 }
+
+/* ============================================================
+   r167 评论区（source/js/hb-comments.js 现场画出来的那一块）
+
+   它落在文章卡的最底下、和「相关推荐」同一层，所以不另起一张卡 ——
+   只在上沿拉一条细线把它和上面隔开，看起来就是文章自带的下一页。
+
+   配色跟站里其它自定义模块同一套：白天走 #2b7fb8 这管海蓝，
+   黑天翻成 #7fd2f5 的浅水色；底色、字色、分割线全部走局部变量，
+   一套变量管两个主题，改色只要动最上面那两组。
+   ============================================================ */
+.hbcm {
+  --hbcm-ink: #232a33;          /* 昵称、小标题 */
+  --hbcm-body: #46525f;         /* 正文 */
+  --hbcm-muted: #8f99a6;        /* 时间、说明、占位 */
+  --hbcm-line: rgba(35, 42, 51, .10);
+  --hbcm-form-bg: #f5f9fc;      /* 表单那块淡底 */
+  --hbcm-field: #fff;           /* 输入框自己的底 */
+  --hbcm-soft: rgba(43, 127, 184, .055);   /* 每条留言的底 */
+  --hbcm-soft-hover: rgba(43, 127, 184, .095);
+  --hbcm-accent: #2b7fb8;
+  --hbcm-accent-soft: rgba(43, 127, 184, .11);
+  --hbcm-warn: #d9534f;
+
+  margin: 38px 0 4px;
+  padding-top: 30px;
+  border-top: 1px solid var(--hbcm-line);
+}
+html.hb-dark .hbcm {
+  --hbcm-ink: #e8eef6;
+  --hbcm-body: #b6c4d2;
+  --hbcm-muted: #8697a8;
+  --hbcm-line: rgba(255, 255, 255, .11);
+  --hbcm-form-bg: rgba(255, 255, 255, .038);
+  --hbcm-field: rgba(255, 255, 255, .065);
+  --hbcm-soft: rgba(255, 255, 255, .045);
+  --hbcm-soft-hover: rgba(127, 210, 245, .08);
+  --hbcm-accent: #7fd2f5;
+  --hbcm-accent-soft: rgba(127, 210, 245, .14);
+  --hbcm-warn: #ff8a80;
+}
+
+/* ---- 顶上那行：小话筒 + 「评论」 + 条数 + 站长小锁 ---- */
+.hbcm-top { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.hbcm-heading { display: flex; align-items: center; gap: 10px; margin-right: auto; }
+.hbcm-heading > i { font-size: 17px; color: var(--hbcm-accent); }
+.hbcm-h { margin: 0; font-size: 20px; font-weight: 700; line-height: 1.3; color: var(--hbcm-ink); }
+.hbcm-n {
+  font-size: 12px; font-weight: 600; line-height: 1.6;
+  padding: 1px 10px; border-radius: 999px;
+  background: var(--hbcm-accent-soft); color: var(--hbcm-accent);
+}
+.hbcm-lock {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; padding: 0; border: 0; border-radius: 50%;
+  background: none; color: var(--hbcm-muted); opacity: .55;
+  font-size: 12.5px; cursor: pointer;
+  transition: opacity .2s, background-color .2s, color .2s;
+}
+.hbcm-lock[hidden] { display: none; }
+.hbcm-lock:hover { opacity: 1; background: var(--hbcm-accent-soft); color: var(--hbcm-accent); }
+.hbcm-lock.is-on { opacity: 1; color: var(--hbcm-accent); background: var(--hbcm-accent-soft); }
+.hbcm-note {
+  flex: 1 0 100%; margin: 4px 0 0;
+  font-size: 12.5px; line-height: 1.7; color: var(--hbcm-muted);
+}
+
+/* ---- 表单 ---- */
+.hbcm-form {
+  margin: 18px 0 0; padding: 20px 20px 16px;
+  background: var(--hbcm-form-bg);
+  border: 1px solid var(--hbcm-line); border-radius: 18px;
+}
+.hbcm-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.hbcm-f { display: flex; flex-direction: column; gap: 7px; margin: 0 0 14px; }
+.hbcm-grid .hbcm-f { margin-bottom: 0; }
+.hbcm-lbl {
+  display: flex; align-items: baseline; gap: 8px;
+  font-size: 12.5px; font-weight: 600; color: var(--hbcm-muted);
+}
+.hbcm-lbl em { font-style: normal; font-weight: 400; font-size: 11.5px; opacity: .85; }
+.hbcm-f input, .hbcm-body {
+  box-sizing: border-box; width: 100%; margin: 0;
+  padding: 11px 14px; border-radius: 12px;
+  border: 1px solid var(--hbcm-line); background: var(--hbcm-field);
+  color: var(--hbcm-ink); font-family: inherit; font-size: 14px; line-height: 1.6;
+  outline: none;
+  transition: border-color .22s, box-shadow .22s, background-color .22s;
+}
+.hbcm-f input::placeholder, .hbcm-body::placeholder { color: var(--hbcm-muted); opacity: .8; }
+.hbcm-f input:focus, .hbcm-body:focus {
+  border-color: var(--hbcm-accent);
+  box-shadow: 0 0 0 3px var(--hbcm-accent-soft);
+}
+.hbcm-body { min-height: 118px; resize: vertical; line-height: 1.8; }
+.hbcm-grid + .hbcm-f { margin-top: 0; }
+
+/* 蜜罐那一格：真人看不见，但要在无障碍树里也藏干净 */
+.hbcm-hp { position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* 回复谁 —— 点「回复」才出现，出现在输入框上面 */
+.hbcm-reply {
+  display: flex; align-items: center; gap: 10px;
+  margin: 0 0 10px; padding: 7px 12px; border-radius: 10px;
+  background: var(--hbcm-accent-soft); color: var(--hbcm-accent);
+  font-size: 12.5px; font-weight: 600;
+}
+.hbcm-reply[hidden] { display: none; }
+.hbcm-reply-who { margin-right: auto; }
+.hbcm-reply-x {
+  padding: 0; border: 0; background: none; cursor: pointer;
+  color: inherit; font: inherit; font-weight: 400; opacity: .8;
+}
+.hbcm-reply-x:hover { opacity: 1; text-decoration: underline; }
+
+/* 底下那行：字数 / 提示 / 发表 */
+.hbcm-actions { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
+.hbcm-count { font-size: 12px; color: var(--hbcm-muted); font-variant-numeric: tabular-nums; }
+.hbcm-count.is-over { color: var(--hbcm-warn); }
+.hbcm-msg { flex: 1 1 auto; font-size: 12.5px; line-height: 1.5; }
+.hbcm-msg.is-ok { color: var(--hbcm-accent); }
+.hbcm-msg.is-bad { color: var(--hbcm-warn); }
+.hbcm-msg.is-wait { color: var(--hbcm-muted); }
+.hbcm-send {
+  flex: 0 0 auto; min-width: 96px; height: 40px; padding: 0 24px;
+  border: 0; border-radius: 999px; cursor: pointer;
+  background: linear-gradient(135deg, #62bde8, var(--hbcm-accent));
+  color: #fff; font-family: inherit; font-size: 14px; font-weight: 600;
+  box-shadow: 0 4px 14px var(--hbcm-accent-soft);
+  transition: transform .22s cubic-bezier(.32, .72, 0, 1), box-shadow .22s, opacity .22s;
+}
+html.hb-dark .hbcm-send { background: linear-gradient(135deg, #4fb3dd, #2b8fc0); color: #f2fbff; }
+@media (hover: hover) and (pointer: fine) {
+  .hbcm-send:hover { transform: translateY(-1px); box-shadow: 0 8px 20px var(--hbcm-accent-soft); }
+}
+.hbcm-send:active { transform: translateY(0) scale(.98); }
+.hbcm-send:disabled { opacity: .55; cursor: default; transform: none; }
+
+/* ---- 留言列表 ---- */
+.hbcm-list {
+  list-style: none; margin: 22px 0 0; padding: 0;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.hbcm-empty {
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  padding: 32px 0 30px; font-size: 13px; color: var(--hbcm-muted);
+}
+.hbcm-empty > i { font-size: 22px; opacity: .55; }
+.hbcm-empty.is-bad > i { color: var(--hbcm-warn); opacity: .8; }
+
+.hbcm-item {
+  padding: 16px 18px; border-radius: 16px;
+  background: var(--hbcm-soft); border: 1px solid transparent;
+  transition: background-color .25s, border-color .25s;
+}
+@media (hover: hover) and (pointer: fine) {
+  .hbcm-item:hover { background: var(--hbcm-soft-hover); border-color: var(--hbcm-line); }
+}
+
+.hbcm-item-head { display: flex; align-items: flex-start; gap: 12px; }
+.hbcm-ava {
+  flex: 0 0 40px; width: 40px; height: 40px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; overflow: hidden;
+  color: #fff; font-size: 16px; font-weight: 600; user-select: none;
+  background-size: cover;
+}
+.hbcm-ava img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.hbcm-ava.is-admin { box-shadow: 0 0 0 2px var(--hbcm-accent-soft); }
+
+.hbcm-who { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.hbcm-name-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.hbcm-name {
+  font-size: 14.5px; font-weight: 600; line-height: 1.5;
+  color: var(--hbcm-ink); text-decoration: none;
+}
+a.hbcm-name:hover { color: var(--hbcm-accent); text-decoration: underline; }
+.hbcm-badge {
+  font-size: 11px; font-weight: 600; line-height: 1.7;
+  padding: 0 8px; border-radius: 999px;
+  background: var(--hbcm-accent-soft); color: var(--hbcm-accent);
+}
+.hbcm-time { font-size: 12px; color: var(--hbcm-muted); }
+
+/* 「回复 / 删除」平时淡一点，鼠标压上去才亮起来；触屏设备一直是亮的 */
+.hbcm-tools { flex: 0 0 auto; display: flex; align-items: center; gap: 12px; padding-top: 2px; }
+.hbcm-tool {
+  padding: 0; border: 0; background: none; cursor: pointer;
+  color: var(--hbcm-muted); font-family: inherit; font-size: 12.5px;
+  transition: color .2s, opacity .2s;
+}
+.hbcm-tool:hover { color: var(--hbcm-accent); }
+.hbcm-tool.is-del:hover { color: var(--hbcm-warn); }
+@media (hover: hover) and (pointer: fine) {
+  .hbcm-tools { opacity: 0; transition: opacity .25s; }
+  .hbcm-item:hover .hbcm-tools,
+  .hbcm-item:focus-within .hbcm-tools { opacity: 1; }
+}
+
+.hbcm-text {
+  margin: 10px 0 0; font-size: 14.5px; line-height: 1.85;
+  color: var(--hbcm-body);
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.hbcm-text a {
+  color: var(--hbcm-accent); text-decoration: none;
+  border-bottom: 1px solid var(--hbcm-accent-soft);
+}
+.hbcm-text a:hover { border-bottom-color: var(--hbcm-accent); }
+
+/* 楼中楼：只缩一层，左边一根细线把「谁在回谁」串起来 */
+.hbcm-sub {
+  list-style: none; margin: 12px 0 0; padding: 0 0 0 14px;
+  border-left: 2px solid var(--hbcm-line);
+  display: flex; flex-direction: column; gap: 10px;
+}
+.hbcm-item.is-child { padding: 12px 14px; }
+
+@media (max-width: 768px) {
+  .hbcm { margin-top: 30px; padding-top: 24px; }
+  .hbcm-form { padding: 16px 15px 14px; border-radius: 16px; }
+  .hbcm-grid { grid-template-columns: 1fr; }
+  .hbcm-grid .hbcm-f { margin-bottom: 14px; }
+  /* 输入框字不能小于 16px：iOS Safari 一聚焦就整页放大 */
+  .hbcm-f input, .hbcm-body { font-size: 16px; }
+  .hbcm-actions { flex-wrap: wrap; }
+  .hbcm-msg { flex: 1 1 auto; }
+  .hbcm-send { flex: 1 0 100%; min-height: 46px; margin-top: 2px; }
+  .hbcm-item { padding: 14px 15px; }
+  .hbcm-item.is-child { padding: 12px 13px; }
+  .hbcm-sub { padding-left: 11px; }
+  /* 手指点不到 hover，两个小钮常亮，并且撑到 44 的舒适区 */
+  .hbcm-tool { min-height: 44px; display: inline-flex; align-items: center; }
+  .hbcm-lock { width: 44px; height: 44px; }
+}
+
+/* 评论交互补齐：沿用现有海洋蓝和明暗主题。 */
+.hbcm { --hbcm-muted: #607184; }
+html.hb-dark .hbcm { --hbcm-muted: #a0b2c4; }
+.hbcm-send { background: #2375a8; color: #fff; }
+.hbcm-refresh { margin-top: 12px; min-height: 44px; }
+.hbcm-reply-target { font-size: 12px; color: var(--hbcm-muted); overflow-wrap: anywhere; }
+.hbcm :is(button, a):focus-visible { outline: 2px solid var(--hbcm-accent); outline-offset: 3px; }
+.hbcm-text, .hbcm-name { overflow-wrap: anywhere; }
+.hbcm-empty button { min-height: 44px; }
+@media (prefers-reduced-motion: reduce) { .hbcm *, .hbcm *::before, .hbcm *::after { transition: none !important; } }

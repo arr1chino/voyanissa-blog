@@ -301,9 +301,13 @@
   }
 
   function boot() {
-    paintTheme(readTheme());
     buildOcean();
     buildButtons();
+    /* 刷主题必须排在 buildButtons 后面：paintTheme 会把右下角那颗钮的图标
+       和提示语改成「当前状态的反面」，而那颗钮是 buildButtons 现建出来的，
+       顺序反了就找不到元素 —— 图标和提示语会一直停在刚创建时写死的那一套上，
+       也就是明明已经是黑夜模式，却还写着「切换到黑夜模式」。 */
+    paintTheme(readTheme());
     maybeAutoBlog();
     bindScrollbar();
     bindCopyRows();

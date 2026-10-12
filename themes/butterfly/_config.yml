@@ -1112,6 +1112,9 @@ inject:
     #   hb-ribbon.js —— 跟着鼠标走的水光拖尾
     - <script src="/js/hb-ui.js" defer></script>
     - <script src="/js/hb-ribbon.js" defer></script>
+    # 评论区。全站都挂上，但它自己第一行就判一次「这一页是不是文章页」，
+    # 不是的话立刻退出，所以首页、日历页、聊天页那些不会白跑一遍。
+    - <script src="/js/hb-comments.js" defer></script>
 # CDN Settings
 # Don't modify the following settings unless you know how they work
 CDN:
