@@ -1,6 +1,10 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import { createCharacterAnimator } from './hero/character.js';
+import { createHeroQuality } from './hero/quality.js';
+import { createCameraTrack } from './hero/camera.js';
+import { IDLE, KEYS } from './hero/config.js';
 
 const stage = document.querySelector('.hero-sticky');
 const canvas = document.querySelector('.hero-canvas');
@@ -8,114 +12,6 @@ const scroller = document.querySelector('.hero-scroll');
 const panels = Array.from(document.querySelectorAll('.hero-panel'));
 const hint = document.querySelector('.hero-hint');
 const fxBlur = document.querySelector('.hero-fx-blur');
-
-/* ---------------------------------------------------------------
-   关键帧：整页只有镜头在动（fit/focus/side/fov/turn/背景色），
-   人物从头到尾都是同一个正面待机姿势 —— 不换姿势、不变身。
-   fit   = 画面里容纳模型高度的比例（越小越近）
-   focus = 画面中心落在模型高度的百分比（0 脚底 / 1 头顶）
-   side  = 机位横向偏移
-   turn  = 模型自身绕 Y 轴旋转（「转到背面」那一幕靠它）
-   pose  = 站立模型的骨骼角度（度），相对静止姿势的偏移
-   --------------------------------------------------------------- */
-/* 唯一的姿势：整段滚动一根骨头都不碰，从头到尾保持这个站姿。
-   数值是相对模型自带静止姿势的角度偏移（度），摆的是「双臂自然垂在身侧、
-   手掌放松下垂」——手落到裙子外侧、手背朝外、掌心朝身体，四指放松微垂、
-   指缝张开，拇指贴着食指。
-   注意日文命名：「腕」是大臂、「ひじ」是小臂，真正的手腕叫「手首」。
-   手臂那四行是「先把整条胳膊摆到身侧（大臂一段、小臂一段），再绕小臂
-   自己的轴把手掌转正」，所以手首那两行回到 0：手腕不再被硬掰，
-   掌心朝向全靠小臂这一段解决（小臂整段藏在袖子里，怎么转都看不见）。
-   以后要微调，改这里的数字就行（每根骨骼 [x, y, z]）。 */
-const IDLE = {
-  /* 手臂：大臂 + 小臂，把双手从「张开悬空」收成贴身自然下垂 */
-  '左腕': [37.08, -36.06, -15.19], '左ひじ': [116.12, -3, 72.83],
-  '右腕': [37.09, 36.06, 15.19], '右ひじ': [116.12, 3, -72.83],
-
-  /* 手腕：绕小臂自己转 42°，把手背从「侧对镜头」扳到「斜对镜头」——
-     手掌还是朝身体那侧（实测掌心法线朝身体的分量 0.81），
-     但正面能看见手指了。手臂整段在袖子里，转多少都看不出来。 */
-  '左手首': [42, 0, 0], '右手首': [42, 0, 0],
-
-  /* 左手四指：自然放松垂手——四指基本并拢、只留 6~8° 的自然缝，
-     指尖微微往掌心弯（z 正 = 往掌心弯）。不再扇开，所以不像爪子。 */
-  '左人指１': [0, 6, 9], '左人指２': [0, 0, 12], '左人指３': [0, 0, 9],
-  '左中指１': [0, 0, 10], '左中指２': [0, 0, 14], '左中指３': [0, 0, 10],
-  '左薬指１': [0, -6, 10], '左薬指２': [0, 0, 14], '左薬指３': [0, 0, 10],
-  '左小指１': [0, -8, 10], '左小指２': [0, 0, 14], '左小指３': [0, 0, 10],
-  /* 左手拇指：贴住食指外侧、指尖朝下垂，像参考立绘那样只留一道窄缝。
-     y 太大（≥45）会整根缩进手掌轮廓看不见；z 不够又会让它横着戳出去。
-     30/35/55 是两者之间：看得见一根、但不再像第六根手指。 */
-  '左親指１': [30, 35, 55], '左親指２': [15, 17, 27],
-
-  /* 右手是左手的镜像（y、z 取反），数值一样的道理 */
-  '右人指１': [0, -6, -9], '右人指２': [0, 0, -12], '右人指３': [0, 0, -9],
-  '右中指１': [0, 0, -10], '右中指２': [0, 0, -14], '右中指３': [0, 0, -10],
-  '右薬指１': [0, 6, -10], '右薬指２': [0, 0, -14], '右薬指３': [0, 0, -10],
-  '右小指１': [0, 8, -10], '右小指２': [0, 0, -14], '右小指３': [0, 0, -10],
-  '右親指１': [30, -35, -55], '右親指２': [15, -17, -27],
-};
-
-/* 背景是一片浅海。下面每一幕给的是这套蓝的「上端色 / 下端色」两个色号，
-   幕与幕之间做插值过渡：转过身背对那一幕压得最深，首尾两幕（正面）最亮，
-   分镜之间的明暗呼吸就靠这个差值。要更亮/更暗只改这几个色号，
-    水面上的流光不在色号里，它在下面的 shader（FLOW_GLOW / FLOW_AMOUNT）。
-
-   和水妖这一层的关系：这几幕的色号是「她泡在水里的那一层」，
-   css 里的 .hero-flow 是「退场之后整站露出来的那一层」，故意比这里再亮一档 ——
-   她淡出的时候是「从偏深的蓝化进更亮的浅海」，这一眼能看出淡出；
-   两边如果调成一模一样的蓝，淡出就看不见了（之前那版就是这个问题）。
-   所以改色号的时候要注意保持这个「hero 比 flow 深半档」的关系。
-
-   fit/focus 全部是「归一化」的：u 是骨骼在模型包围盒里的高度（0 脚底 / 1 最高点），
-   取景和模型缩放、包围盒大小无关，所以这套数字换模型也照样能用。 */
-const KEYS = [
-  /* 0 「About Me」开场：整屏只放中间那组艺术字 + 打字机，不放资料卡。
-     取景就是下一幕那套（fit 0.574 / focus 0.782）往后退一档 ——
-     fit 从 0.574 放到 0.640，多看到约 11% 的身高；focus 原地不动，
-     所以她不会上下乱跑，只是头顶那片天和脚下的裙子各多露一点。
-     滚到下一幕再轻轻推近回原样，等于开场一个很缓的推镜。 */
-  { at: 0.00, cam: { fit: 0.640, fitN: 1.150, focus: 0.782, side: 0.00, fov: 34 }, turn: 0,
-      bg: 0x4fb4da, bg2: 0x2d88b3 },
-
-  /* 1 半身正面：第一张资料卡。镜头按「头顶留 1/8 空白、下沿切到大腿二分之一」
-     解出来的 fit/focus（用骨骼量的大腿中点当标尺，误差 0.3px 以内）。不加黑色滤镜。 */
-  { at: 0.20, cam: { fit: 0.574, fitN: 1.030, focus: 0.782, side: 0.00, fov: 34 }, turn: 0,
-      bg: 0x4fb4da, bg2: 0x2d88b3 },
-
-  /* 2 右下仰视脸部特写：取景跟以前那版脸部特写同一套（fit/focus 没动），
-     只是把机位压到注视点的斜下方 —— elev 是负的，镜头自然就往上仰；
-     yaw 负值把机位绕到她的右前方，所以是「右下往上看」。
-     lookZ 把注视点挪到脸前面（不挪的话仰拍会框到脖子）。配虚化 + 黑色滤镜。
-     yaw/elev 是按「仰角压得太狠了」往回收过一档的（-0.30/-0.17 → -0.33/-0.13）。 */
-  { at: 0.40, cam: { fit: 0.170, fitN: 0.340, focus: 0.884, side: 0.00, fov: 34, yaw: -0.33, elev: -0.13, lookZ: 0.090, lookX: 0.02 },
-      turn: 0, bg: 0x49abd4, bg2: 0x2880ab, fx: 1, shade: 1 },
-
-  /* 3 半身背面：取景跟半身正面同一套数字（一样只露到大腿二分之一），
-     背景在这一幕压得最暗，黑色滤镜继续开着。 */
-  { at: 0.60, cam: { fit: 0.574, fitN: 1.030, focus: 0.782, side: 0.00, fov: 34 }, turn: Math.PI,
-      bg: 0x419cc6, bg2: 0x22759f, shade: 1 },
-
-  /* 4 左上角俯拍脸部特写：yaw 取正值，把机位绕到她的左前方（取负值就跑到右前方，
-     那样就跟上一幕的「右下仰视」挤在同一侧了）—— 跟「右下仰视」正好错开一个对角，
-     滚动时镜头走的是右下 → 左上这条对角线。
-     elev 把机位抬到注视点上方 0.26 个身高，框住头 + 肩（按「压得太狠了」回收过一档）。
-     lookZ 0.10 把注视点往前挪到头的位置（不挪的话脸会被推到画面右下角），
-     lookX 0.04 再把注视点往她的左手侧带一点，人就被挤到画面左上角、
-     给右下角的面板腾出地方。虚化 + 黑色滤镜都开着。 */
-  { at: 0.80, cam: { fit: 0.240, fitN: 0.400, focus: 0.870, side: 0.00, fov: 34, yaw: 0.21, elev: 0.26, lookZ: 0.100, lookX: 0.04 },
-      turn: Math.PI * 2, bg: 0x4aadd2, bg2: 0x297fab, fx: 1, shade: 1 },
-
-  /* 5 正面脸部特写收尾：转回正面、正对她，取景按「脸在画面正中、整个头完整
-     入画」量的 —— 左右眼骨头的中点在横向正中（偏差 0px），眼睛那一行在纵向
-     47.8%（略高于中线），头顶 11.2%、下巴到脖子那一线 74.1%，头占画面高度
-     58.2%，下巴以下留出肩颈给画面收尾。
-     这些数字来自「把模型藏起来截图相减」量的真实像素边界 + 骨头投影行号，
-     换模型、改姿势或改景别都得重量一遍，工具：work/model-tools/act5fit.js。
-     虚化和黑色滤镜都在这里收掉，画面干净地交给下面的博客。 */
-  { at: 1.00, cam: { fit: 0.3200, fitN: 0.400, focus: 0.8930, side: 0.00, fov: 34 }, turn: Math.PI * 2,
-      bg: 0x4fb4da, bg2: 0x2d88b3 },
-];
 
 /* 流光的两个旋钮：GLOW 是光的颜色（偏青的冷白，像阳光穿到水里的那种白，
    浅海版把它调得更白更淡了一档 —— 水浅的时候亮部是发白的，不是发青的），
@@ -172,9 +68,16 @@ const easeInOut = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) 
 /* 只有一套模型：常服站姿，从头到尾都是它。 */
 const MODEL_DEFS = [{ id: 'stand', url: '/assets/model.glb' }];
 const ACTORS = {};
+const actorList = [];
+const compactDevice = window.matchMedia('(pointer: coarse)').matches || window.innerWidth < 760;
+const quality = createHeroQuality({ devicePixelRatio: window.devicePixelRatio || 1, compact: compactDevice });
+const nextBg = new THREE.Color();
+let frameRequest = 0, renderingStopped = false, lastRendered = 0;
+let scrollTop = 0, scrollSpan = 1;
 
 let renderer, scene, camera, shadowPlane, skyMat;
 let box = new THREE.Box3(), size = new THREE.Vector3(), center = new THREE.Vector3();
+const cameraTrack = createCameraTrack({ THREE, box, size, center });
 let bgColor = new THREE.Color(KEYS[0].bg), targetBg = new THREE.Color(KEYS[0].bg);
 let bgTop = new THREE.Color(KEYS[0].bg), bgBot = new THREE.Color(KEYS[0].bg2);
 let targetBgTop = new THREE.Color(KEYS[0].bg), targetBgBot = new THREE.Color(KEYS[0].bg2);
@@ -199,8 +102,9 @@ const camBase = new THREE.Vector3();
    --------------------------------------------------------------- */
 const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 let lenis = null;
-if (!reduced && typeof window.Lenis === 'function') {
-  lenis = new window.Lenis({
+function initSmoothScroll() {
+  if (!reduced && typeof window.Lenis === 'function') {
+    lenis = new window.Lenis({
     /* 0.1 就是 Lenis 的默认阻尼，也是 greymac 那档手感：
        一帧追 10% 的差值，滚轮松手后还会滑一小段再停。 */
     lerp: 0.1,
@@ -208,14 +112,15 @@ if (!reduced && typeof window.Lenis === 'function') {
     touchMultiplier: 1.6,
     smoothWheel: true,
     autoRaf: false,
-  });
+    });
+  }
 }
 
 /* 退场淡出：分镜走完（progress 到 1）之后，这屏像 greymac 一样「原地淡掉」——
    位置焊死不动，只把整层 opacity 收掉。长度见下面的 FADE_SPAN。
    Lenis 开着的时候 scrollY 已经被抹顺了，这里就不必再叠阻尼，
    把追加速度提上去，等于只留 Lenis 那一层平滑（双阻尼会跟手差半拍）。 */
-const PROG_LERP = lenis ? 22 : 7;
+let PROG_LERP = 7;
 /* 退场淡出占几屏。0.5 = 分镜一走完就开始淡，滚过半屏正好淡干净。
    这个数只有两个地方用：下面 frame() 里算淡出进度，以及「整屏淡完之后
    把 3D 渲染停掉」的判定 —— 两处必须是同一个数，所以提到这儿来。 */
@@ -231,7 +136,8 @@ let blinkT = -1, blinkLen = 0.2, blinkQueue = 0, blinkOverride = null;
 
 function initRenderer() {
   renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setPixelRatio(quality.resize(stage.clientWidth, stage.clientHeight));
+  stage.dataset.quality = quality.compact ? 'compact' : 'balanced';
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.NoToneMapping;
 
@@ -610,7 +516,7 @@ function measureActor(a) {
 }
 
 function measure() {
-  Object.values(ACTORS).forEach(measureActor);
+  actorList.forEach(measureActor);
 
   const s = ACTORS.stand;
   shadowPlane = new THREE.Mesh(
@@ -627,67 +533,6 @@ function measure() {
   center.copy(s.center);
 }
 
-function camFor(cam, turn) {
-  /* 竖屏修正。手机是「又高又窄」，同一套 fit 拿到竖屏上，画面横向会被切掉一大块 ——
-     量过：390 宽的屏上，「半身正面」那一幕她算上袖子要占 235% 的画面宽度，
-     两台特写更极端（只剩半张脸）。所以每一幕额外给了一套竖屏专用的 fit（fitN），
-     六幕的 fitN 全部是「竖屏实拍扫参数」逐个试出来的，不是按桌面那套乘系数推的 ——
-     早先试过乘 1.45（0.928 / 0.832），那个系数只按「画面宽度够不够」算了，
-     漏了「她正面朝着镜头、脸和胸离机位比包围盒中心近半个身位」这一层：
-     近处的东西会被透视放大，所以按 1.45 摆出来头顶是顶出画面被切掉的。
-     第 5 幕 0.400、第 2 幕 0.340、第 4 幕 0.400 是「两只眼睛都在框里、脸占满画面」；
-     第 0/1/3 幕 1.150 / 1.030 / 1.030 是「头顶留出空白、袖子完整、下沿切到大腿」。
-     效果是「人整体往后退一点，横向伸出去的袖子、头发不再被切」。
-     两套之间按屏幕宽高比平滑过渡：≥1.25（宽屏/桌面）用桌面那套、≤0.95（竖屏手机）
-     用竖屏那套，中间线性混，所以转屏、改窗口大小都不会跳。 */
-  const wMix = clamp((1.25 - camera.aspect) / (1.25 - 0.95), 0, 1);
-  const fit = cam.fit + ((cam.fitN == null ? cam.fit : cam.fitN) - cam.fit) * wMix;
-  const visH = fit * size.y * 1.12;
-  const dist = (visH * 0.5) / Math.tan(deg(cam.fov) * 0.5);
-  const focusY = box.min.y + size.y * cam.focus;
-  /* 鼠标视差跟着当前景别走：不管推得多近，位移都只占画面的 5%（横）/ 2.5%（纵），
-     所以特写的时候也不会“一晃就飞出去”。 */
-  const visW = visH * camera.aspect;
-  const lat = size.y * cam.side * 0.5 + mouseSmooth.x * visW * 0.05;
-  const up = mouseSmooth.y * visH * 0.025;
-  /* 机位可以额外绕 Y 轴转一个方位角 yaw（0 = 正对模型正面），并抬到注视点上方
-     elev × 模型高度（抬起来之后 lookAt 还是盯着注视点，所以视角自然就往下压）。
-     base 是「不含鼠标视差」的那个机位——眼球跟随要用它当原点，见 updateEyeLook。 */
-  const yaw = cam.yaw || 0;
-  const elev = (cam.elev || 0) * size.y;
-  /* lookX / lookZ 把「注视点」从包围盒中心挪开（模型高度的倍数）。
-     头并不在包围盒中心的正上方——它在 z 上往前偏 0.11 个身高，
-     所以绕到侧上方俯拍时要把注视点挪到头上去，不然脸会被推到画面角上。 */
-  const look = new THREE.Vector3(center.x + (cam.lookX || 0) * size.y, focusY, center.z + (cam.lookZ || 0) * size.y);
-  const sa = Math.sin(yaw), ca = Math.cos(yaw);
-  const bx = look.x + sa * dist + lat * ca;
-  const bz = look.z + ca * dist - lat * sa;
-  const by = look.y + elev;
-  return {
-    pos: new THREE.Vector3(bx, by + up, bz),
-    base: new THREE.Vector3(bx, by, bz),
-    look,
-    fov: cam.fov,
-  };
-}
-
-/* 把一组骨骼角度写到某个模型上；两套模型骨骼名不同，各自缺的会自动跳过 */
-function poseTrack(actor, pa, pb, t) {
-  if (!actor) return;
-  pa = pa || {}; pb = pb || {};
-  const bones = new Set([...Object.keys(pa), ...Object.keys(pb)]);
-  bones.forEach((n) => {
-    const bone = actor.boneMap.get(n); if (!bone) return;
-    const rest = actor.restRot.get(n) || { x: 0, y: 0, z: 0 };
-    const p = pa[n] || [0, 0, 0], q = pb[n] || [0, 0, 0];
-    bone.rotation.set(
-      rest.x + deg(p[0] + (q[0] - p[0]) * t),
-      rest.y + deg(p[1] + (q[1] - p[1]) * t),
-      rest.z + deg(p[2] + (q[2] - p[2]) * t)
-    );
-  });
-}
-
 function applyKey(px) {
   let i = 0;
   while (i < KEYS.length - 2 && px > KEYS[i + 1].at) i++;
@@ -695,26 +540,11 @@ function applyKey(px) {
   const span = Math.max(1e-6, b.at - a.at);
   const t = easeInOut(clamp((px - a.at) / span, 0, 1));
 
-  const cam = {
-    fit: a.cam.fit + (b.cam.fit - a.cam.fit) * t,
-    /* 竖屏那套 fit（fitN）也要一起插值 —— 漏了它，窄屏上滚到两幕中间就会跳。
-       没写 fitN 的幕按 fit 算，等于「这一幕不分竖屏」。 */
-    fitN: (a.cam.fitN == null ? a.cam.fit : a.cam.fitN) +
-      ((b.cam.fitN == null ? b.cam.fit : b.cam.fitN) - (a.cam.fitN == null ? a.cam.fit : a.cam.fitN)) * t,
-    focus: a.cam.focus + (b.cam.focus - a.cam.focus) * t,
-    side: a.cam.side + (b.cam.side - a.cam.side) * t,
-    fov: a.cam.fov + (b.cam.fov - a.cam.fov) * t,
-    yaw: (a.cam.yaw || 0) + ((b.cam.yaw || 0) - (a.cam.yaw || 0)) * t,
-    elev: (a.cam.elev || 0) + ((b.cam.elev || 0) - (a.cam.elev || 0)) * t,
-    /* 注视点偏移也必须一起插值 —— 漏了这两行的话 camFor 里读到的永远是
-       undefined（= 0），第 4 幕「把注视点挪到头上去」等于没写。 */
-    lookX: (a.cam.lookX || 0) + ((b.cam.lookX || 0) - (a.cam.lookX || 0)) * t,
-    lookZ: (a.cam.lookZ || 0) + ((b.cam.lookZ || 0) - (a.cam.lookZ || 0)) * t,
-  };
+  const cam = cameraTrack.interpolate(a.cam, b.cam, t);
   const turn = a.turn + (b.turn - a.turn) * t;
-  targetBg.setHex(a.bg).lerp(new THREE.Color(b.bg), t);
-  targetBgTop.setHex(a.bg).lerp(new THREE.Color(b.bg), t);
-  targetBgBot.setHex(a.bg2).lerp(new THREE.Color(b.bg2), t);
+  targetBg.setHex(a.bg).lerp(nextBg.setHex(b.bg), t);
+  targetBgTop.copy(targetBg);
+  targetBgBot.setHex(a.bg2).lerp(nextBg.setHex(b.bg2), t);
   /* 黑天：三个色号一起压深。乘完再往下走，所以插值、淡出这些都不受影响 —— 
      只有「这一帧的目标颜色」被换掉了，其余逻辑一行没动。 */
   if (document.documentElement.classList.contains('hb-dark')) {
@@ -723,26 +553,13 @@ function applyKey(px) {
     targetBgBot.multiplyScalar(DARK_BG);
   }
 
-  poseTrack(ACTORS.stand, a.pose || IDLE, b.pose || IDLE, t);
+  for (const actor of actorList) {
+    actor.animator.pose(a.pose || IDLE, b.pose || IDLE, t);
+    actor.animator.morph(a.morph, b.morph, t, blinkValue);
+  }
 
-  const morphNames = new Set([...Object.keys(a.morph || {}), ...Object.keys(b.morph || {})]);
-  Object.values(ACTORS).forEach((actor) => {
-    actor.morphMeshes.forEach((mesh) => {
-      Object.keys(mesh.morphTargetDictionary).forEach((name) => {
-        const idx = mesh.morphTargetDictionary[name];
-        let v = 0;
-        if (morphNames.has(name)) {
-          const p = (a.morph && a.morph[name]) || 0, q = (b.morph && b.morph[name]) || 0;
-          v = p + (q - p) * t;
-        }
-        if (name === 'まばたき') v = Math.max(v, blinkValue);
-        mesh.morphTargetInfluences[idx] = v;
-      });
-    });
-  });
-
-  Object.values(ACTORS).forEach((actor) => { actor.model.rotation.y = turn; });
-  const c = camFor(cam, turn);
+  actorList.forEach((actor) => { actor.model.rotation.y = turn; });
+  const c = cameraTrack.sample(cam, mouseSmooth, camera.aspect);
   camera.position.copy(c.pos);
   camBase.copy(c.base);
   camera.lookAt(c.look);
@@ -767,11 +584,14 @@ function applyKey(px) {
     const d = Math.abs(px - PANEL_CENTERS[k]);
     const o = d <= PANEL_SOLID ? 1
       : clamp(1 - (d - PANEL_SOLID) / (PANEL_SPAN - PANEL_SOLID), 0, 1);
-    el.style.opacity = o.toFixed(3);
-    el.style.transform = 'translateY(' + ((1 - o) * 18).toFixed(1) + 'px)';
+    const opacity = o.toFixed(3);
+    const transform = 'translateY(' + ((1 - o) * 18).toFixed(1) + 'px)';
+    if (el.style.opacity !== opacity) el.style.opacity = opacity;
+    if (el.style.transform !== transform) el.style.transform = transform;
     /* 资料卡也是磨砂（backdrop-filter），看不见的那几张留着照样要算。
        彻底收掉之后把整棵子树藏起来。 */
-    el.style.visibility = o < 0.005 ? 'hidden' : '';
+    const visibility = o < 0.005 ? 'hidden' : '';
+    if (el.style.visibility !== visibility) el.style.visibility = visibility;
   });
   if (hint) hint.style.opacity = String(clamp(1 - px * 8, 0, 0.85));
 }
@@ -854,6 +674,7 @@ const _qT = new THREE.Quaternion(), _qID = new THREE.Quaternion();
 const _qE = new THREE.Quaternion(), _eul = new THREE.Euler();
 const _ey = new THREE.Vector3(), _dA = new THREE.Vector3(), _dB = new THREE.Vector3();
 const _pin = new THREE.Vector3();
+const _matrixScale = new THREE.Vector3(), _parentPosition = new THREE.Vector3();
 const _rx = new THREE.Vector3(), _ry = new THREE.Vector3();
 
 function buildEyeRig() {
@@ -865,12 +686,17 @@ function buildEyeRig() {
     if (!bone) return;
     eyes.push({ bone, rest: bone.quaternion.clone() });
   });
-  eyeRig = eyes.length ? { root: actor.model, eyes } : null;
+  const parents = [];
+  for (const eye of eyes) {
+    const chain = [];
+    for (let parent = eye.bone.parent; parent; parent = parent.parent) chain.unshift(parent);
+    for (const parent of chain) if (!parents.includes(parent)) parents.push(parent);
+  }
+  eyeRig = eyes.length ? { eyes, parents } : null;
 }
 
 function updateEyeLook() {
   if (!eyeRig) return;
-  const root = eyeRig.root;
   eyeRig.eyes.forEach((e) => { e.bone.quaternion.copy(e.rest); });
   if (eyeOverride) {
     /* 在「头的坐标系」里叠一个旋转：目骨静止时朝 +z 看、局部 y 轴朝上，
@@ -878,17 +704,19 @@ function updateEyeLook() {
     _eul.set(-eyeOverride.pitch * Math.PI / 180, eyeOverride.yaw * Math.PI / 180, 0, 'XYZ');
     _qE.setFromEuler(_eul);
     eyeRig.eyes.forEach((e) => { e.bone.quaternion.premultiply(_qE); });
-    root.updateMatrixWorld(true);
     return;
   }
-  root.updateMatrixWorld(true);
+  // Fixed local bone matrices still need current world transforms during camera turns.
+  // Update the shared ancestor chain explicitly; forcing an eye alone does not force its parents.
+  for (const parent of eyeRig.parents) parent.updateWorldMatrix(false, false, true);
 
   /* 镜头矩阵要现算：updateEyeLook 在 render 之前跑，不更新的话
      unproject 用的还是上一帧的镜头（差一帧，几乎看不出来，但没必要省）。 */
   camera.updateMatrixWorld();
   eyeRig.eyes.forEach((e) => {
-    e.bone.getWorldQuaternion(_qW);
-    e.bone.getWorldPosition(_ey);
+    // Only refresh the eye ancestor chain; render() updates the complete scene once.
+    e.bone.updateWorldMatrix(false, false, true);
+    e.bone.matrixWorld.decompose(_ey, _qW, _matrixScale);
     /* 指针盯点：镜头坐标系里 (x, y, -S)，再变换回世界。S 跟着「镜头到这只眼睛
        的距离」缩放，所以不管镜头推多近、拉多远，转动的量级都差不多。 */
     const dist = camera.position.distanceTo(_ey);
@@ -910,21 +738,20 @@ function updateEyeLook() {
     const lim = Math.hypot(yawLeft / EYE_YAW_MAX, pitchUp / (pitchUp > 0 ? EYE_UP_MAX : EYE_DOWN_MAX));
     _qT.copy(_qA);
     if (lim > 1) _qT.copy(_qID).slerp(_qA, 1 / lim);
-    e.bone.parent.getWorldQuaternion(_qP);
+    e.bone.parent.matrixWorld.decompose(_parentPosition, _qP, _matrixScale);
     _qP.invert().multiply(_qT.multiply(_qW));
     e.bone.quaternion.copy(_qP);
   });
-  root.updateMatrixWorld(true);
 }
 
 /* 滑动时的轻微动态模糊：强度跟着「滚动速度」走，停下就归零（滑得越快越明显）。
    只作用在 canvas 这一层，不动任何几何和取景，所以它纯粹是观感上的东西。 */
-const MB_KNEE = 0.04, MB_K = 4.5, MB_MAX = 3.2;
+const MB_KNEE = 0.04, MB_K = 4.5;
 function updateMotionBlur(dt) {
   const vel = Math.abs(target - lastTarget) / Math.max(dt, 1e-3);
   lastTarget = target;
   scrollVel += (vel - scrollVel) * Math.min(1, dt * 9);
-  const want = clamp((scrollVel - MB_KNEE) * MB_K, 0, MB_MAX);
+  const want = clamp((scrollVel - MB_KNEE) * MB_K, 0, quality.motionBlurMax);
   blurNow += (want - blurNow) * Math.min(1, dt * 14);
   if (blurNow > 0.08) {
     const f = 'blur(' + blurNow.toFixed(2) + 'px)';
@@ -935,7 +762,11 @@ function updateMotionBlur(dt) {
 function resize() {
   if (!renderer) return;
   const w = stage.clientWidth, h = stage.clientHeight;
+  renderer.setPixelRatio(quality.resize(w, h));
   renderer.setSize(w, h, false);
+  const rect = scroller.getBoundingClientRect();
+  scrollTop = rect.top + window.scrollY;
+  scrollSpan = Math.max(1, rect.height - window.innerHeight);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
   /* 水面纹路按真实宽高比算，宽屏上才不会被拉扁 */
@@ -1001,12 +832,10 @@ async function warmShaders(slices) {
   }
 }
 
-/* 一帧只量一次 hero-scroll 的位置，分镜进度和退场淡出都用它 ——
-   同一帧里量两遍只会多一次强制重排。 */
+/* 滚动区尺寸在 resize 时缓存；逐帧只读 scrollY，避免反复查询布局。 */
 function heroMetrics() {
-  const r = scroller.getBoundingClientRect();
-  const scrolled = -r.top;                       // 已滚过多少（hero-scroll 从文档顶部开始）
-  const span = Math.max(1, r.height - window.innerHeight);  // 分镜占用的滚动距离
+  const scrolled = window.scrollY - scrollTop;                       // 已滚过多少（hero-scroll 从文档顶部开始）
+  const span = scrollSpan;  // 分镜占用的滚动距离
   return { scrolled, span };
 }
 function scrollProgress(m) {
@@ -1017,9 +846,23 @@ function scrollProgress(m) {
 let last = performance.now();
 /* 「只画海」那一支的节流时间戳，见下面 frame() 里 else 那一支和 r140 的说明。 */
 let lastSky = 0;
+function scheduleFrame() {
+  if (!frameRequest && !renderingStopped && !document.hidden) frameRequest = requestAnimationFrame(frame);
+}
+
 function frame(now) {
-  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  frameRequest = 0;
+  if (renderingStopped || document.hidden) return;
   if (lenis) lenis.raf(now);
+  const requestedProgress = frozen === null ? clamp((window.scrollY - scrollTop) / scrollSpan, 0, 1) : frozen;
+  const moving = Math.abs(requestedProgress - progress) > .0001 ||
+    Math.abs(mouse.x - mouseSmooth.x) + Math.abs(mouse.y - mouseSmooth.y) > .002 ||
+    Math.abs(target - lastTarget) > .0001 || blinkT >= 0;
+  const interval = moving ? 1000 / 60 : 1000 / 30;
+  if (now - lastRendered < interval - 1) { scheduleFrame(); return; }
+  if (ready && quality.sample(now - lastRendered, moving)) resize();
+  lastRendered = now;
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
   if (ready) {
     const m = heroMetrics();
     /* 这一屏已经整层淡完了（白卡把它从头到脚盖住，用户在看博客）。
@@ -1029,7 +872,7 @@ function frame(now) {
        往下读文章时滑动跟不跟手，差的就是这一块。往回滚一进来立刻恢复。 */
     if (frozen === null && m.scrolled >= m.span + FADE_SPAN * window.innerHeight) {
       if (lastStageOpacity !== 0) { lastStageOpacity = 0; stage.style.opacity = '0'; }
-      requestAnimationFrame(frame);
+      scheduleFrame();
       return;
     }
     target = scrollProgress(m);
@@ -1087,7 +930,7 @@ function frame(now) {
     }
 
     const breathe = Math.sin(now * 0.0011) * 0.004 + Math.sin(now * 0.0007 + 1.7) * 0.0025;
-    Object.values(ACTORS).forEach((a) => { a.model.position.y = breathe; });
+    actorList.forEach((a) => { a.model.position.y = breathe; });
 
     /* 第一次真正把海画出来的这一帧，顺手把遮罩里那层兜底黑底撤掉
        （上面「只画海」那一支现在要等到退场才跑，这条得在这儿补上）。 */
@@ -1107,13 +950,13 @@ function frame(now) {
        现在等 hideLoader 把退场开起来（loaderLeaving）才恢复画海：淡出有
        0.8 秒，第一帧海在 16 毫秒内就补上，肉眼看不出空档。
        （早先那版限到 30fps 是同一个思路，只是让得太少，这回直接全让出去。） */
-    if (!loaderLeaving) { requestAnimationFrame(frame); return; }
-    if (now - lastSky < 33) { requestAnimationFrame(frame); return; }
+    if (!loaderLeaving) { scheduleFrame(); return; }
+    if (now - lastSky < 33) { scheduleFrame(); return; }
     lastSky = now;
     renderSkyOnly(now);
     markSkyLive();
   }
-  requestAnimationFrame(frame);
+  scheduleFrame();
 }
 
 /* 模型还没解析完的时候，先把「海」画出来。
@@ -1184,6 +1027,10 @@ function hideLoader() {
 }
 
 function fallbackPoster() {
+  renderingStopped = true;
+  if (frameRequest) cancelAnimationFrame(frameRequest);
+  frameRequest = 0;
+  if (lenis) { lenis.destroy(); lenis = null; }
   hideLoader();
   const poster = document.createElement('div');
   poster.className = 'hero-poster';
@@ -1281,6 +1128,8 @@ function boot() {
   if (reduced || smallScreen) { fallbackPoster(); ready = false; return; }
 
   try { initRenderer(); } catch (e) { fallbackPoster(); return; }
+  initSmoothScroll();
+  PROG_LERP = lenis ? 22 : 7;
   /* 画布尺寸要在这一帧就定下来，不能等 ready 那一步：
      模型加载期间画的是同一片海，尺寸晚定就白画一段低分辨率的。 */
   resize();
@@ -1308,6 +1157,8 @@ function boot() {
           if (!actor.restRot.has(o.name)) actor.restRot.set(o.name, { x: o.rotation.x, y: o.rotation.y, z: o.rotation.z });
         }
       });
+      actor.animator = createCharacterAnimator(actor);
+      actorList.push(actor);
       mark('bone-map');
       actor.model.visible = true;
       ACTORS[def.id] = actor;
@@ -1338,6 +1189,8 @@ function boot() {
        片间让帧，观感从「进来卡死一秒多」变成「零星几下小顿」。 */
     return warmShaders(SHADER_SLICES);
   }).then(() => {
+    applyKey(progress);
+    for (const actor of actorList) actor.animator.freezeStaticBones(EYE_BONES);
     ready = true;
     mark('ready');
     /* 等真正画出一帧带角色的画面再撤遮罩：ready 只是「数据齐了」，
@@ -1352,6 +1205,7 @@ function boot() {
       jump(y) { if (lenis) lenis.scrollTo(y, { immediate: true }); else window.scrollTo(0, y); },
       scrollTo(y, o) { if (lenis) lenis.scrollTo(y, o || {}); else window.scrollTo(0, y); },
       lenis,
+      quality() { return quality.snapshot(); },
       setBlink(v) { blinkOverride = v; applyKey(frozen === null ? progress : frozen); renderer.render(scene, camera); },
       unblink() { blinkOverride = null; },
       blink() { blinkT = 0; blinkLen = 0.2; blinkNext = 99; },
@@ -1364,7 +1218,7 @@ function boot() {
       state() {
         return {
           progress, ready, size: size.toArray(),
-          bones: Object.values(ACTORS).reduce((n, a) => n + a.boneMap.size, 0),
+          bones: actorList.reduce((n, a) => n + a.boneMap.size, 0),
           parts: Object.keys(ACTORS),
         };
       },
@@ -1403,8 +1257,26 @@ function boot() {
     mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
     mouse.y = -((e.clientY / window.innerHeight) * 2 - 1);
   }, { passive: true });
-  document.addEventListener('visibilitychange', () => { last = performance.now(); });
-requestAnimationFrame(frame);
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      if (frameRequest) cancelAnimationFrame(frameRequest);
+      frameRequest = 0;
+    } else {
+      last = performance.now(); lastRendered = 0;
+      scheduleFrame();
+    }
+  });
+  const sizeObserver = new ResizeObserver(() => resize());
+  sizeObserver.observe(stage);
+  window.addEventListener('pagehide', (event) => {
+    if (frameRequest) cancelAnimationFrame(frameRequest);
+    frameRequest = 0;
+    if (!event.persisted) { renderingStopped = true; sizeObserver.disconnect(); if (lenis) lenis.destroy(); }
+  });
+  window.addEventListener('pageshow', (event) => {
+    if (event.persisted) { last = performance.now(); lastRendered = 0; resize(); scheduleFrame(); }
+  });
+scheduleFrame();
 }
 
 boot();

@@ -2211,3 +2211,9 @@ html.hb-dark .hbcm { --hbcm-muted: #a0b2c4; }
 .hbcm-text, .hbcm-name { overflow-wrap: anywhere; }
 .hbcm-empty button { min-height: 44px; }
 @media (prefers-reduced-motion: reduce) { .hbcm *, .hbcm *::before, .hbcm *::after { transition: none !important; } }
+
+/* Phone quality keeps the existing effect while reducing full-screen filter work. */
+.hero-sticky[data-quality="compact"] .hero-fx-blur {
+  -webkit-backdrop-filter: blur(6px) saturate(.95);
+  backdrop-filter: blur(6px) saturate(.95);
+}

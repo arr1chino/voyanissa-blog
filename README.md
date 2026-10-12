@@ -23,6 +23,7 @@ source/_posts/        文章，一篇一个 .md 文件
 source/index.md       首页
 source/css/           自定义样式
 source/js/            自定义脚本
+source/js/hero/       角色动画、镜头取景、分镜配置与设备画质
 source/img/           图片、头像、加载动画视频
 source/vendor/        Three.js 运行时
 source/assets/        3D 模型（.glb）
@@ -45,6 +46,14 @@ npm run server   # 启动本地预览，默认 http://localhost:4000
 npm run build    # 生成静态网页到 public/
 npm run deploy   # 推送到 GitHub Pages
 ```
+
+## 首页渲染维护
+
+`source/js/hero.js` 负责加载与渲染调度，`source/js/hero/` 中的模块分别管理角色动画、镜头取景、分镜参数和设备画质。固定站姿只初始化一次；眼球和眨眼继续更新，身体骨骼的世界矩阵跟随整体旋转。调整手势或镜头时修改 `config.js`，调整像素预算时修改 `quality.js`。
+
+交互期间最多渲染 60 帧／秒，静止时最多 30 帧／秒；角色淡出到博客区域后停止 WebGL 绘制，隐藏页面时暂停循环，返回页面时恢复。手机使用较低像素比和模糊强度。持续交互掉帧时画质最多下调两档，避免反复切换。
+
+执行 `npm run test:hero` 检查固定姿势缓存、表情重置、插值与画质分档。发布构建会压缩这些模块，并为入口引用附加内容版本，避免模块更新后浏览器继续使用旧缓存。
 
 ## 说明
 
