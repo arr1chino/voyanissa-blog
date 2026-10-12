@@ -5,7 +5,6 @@ import { createCharacterAnimator } from './hero/character.js';
 import { createHeroQuality } from './hero/quality.js';
 import { createCameraTrack } from './hero/camera.js';
 import { IDLE, KEYS } from './hero/config.js';
-import { createVideoBackground } from './hero/video-background.js';
 
 const stage = document.querySelector('.hero-sticky');
 const canvas = document.querySelector('.hero-canvas');
@@ -76,7 +75,7 @@ const nextBg = new THREE.Color();
 let frameRequest = 0, renderingStopped = false, lastRendered = 0;
 let scrollTop = 0, scrollSpan = 1;
 
-let renderer, scene, camera, shadowPlane, skyMat, sky, videoBackground;
+let renderer, scene, camera, shadowPlane, skyMat;
 let box = new THREE.Box3(), size = new THREE.Vector3(), center = new THREE.Vector3();
 const cameraTrack = createCameraTrack({ THREE, box, size, center });
 let bgColor = new THREE.Color(KEYS[0].bg), targetBg = new THREE.Color(KEYS[0].bg);
@@ -136,8 +135,7 @@ let blinkValue = 0, blinkNext = 1.6 + Math.random() * 2.4;
 let blinkT = -1, blinkLen = 0.2, blinkQueue = 0, blinkOverride = null;
 
 function initRenderer() {
-  renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
-  renderer.setClearColor(0x000000, 0);
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: 'high-performance' });
   renderer.setPixelRatio(quality.resize(stage.clientWidth, stage.clientHeight));
   stage.dataset.quality = quality.compact ? 'compact' : 'balanced';
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -233,7 +231,7 @@ function initRenderer() {
       '}',
     ].join('\n'),
   });
-  sky = new THREE.Mesh(new THREE.SphereGeometry(60, 24, 16), skyMat);
+  const sky = new THREE.Mesh(new THREE.SphereGeometry(60, 24, 16), skyMat);
   sky.renderOrder = -2;
   sky.frustumCulled = false;
   scene.add(sky);
@@ -242,7 +240,6 @@ function initRenderer() {
   const fill = new THREE.DirectionalLight(0xdce8ff, 0.42); fill.position.set(-1.5, 0.7, 0.9); scene.add(fill);
   const rim = new THREE.DirectionalLight(0xbfe6ff, 0.8); rim.position.set(-0.9, 1.4, -1.7); scene.add(rim);
   scene.add(new THREE.HemisphereLight(0xffffff, 0xaebfd0, 0.75));
-  videoBackground = createVideoBackground(stage, { compact: compactDevice });
 }
 
 function makeShadow() {
@@ -874,7 +871,6 @@ function frame(now) {
        判定通过就整段跳过：位置、相机、眨眼全都不用算，一帧只剩 Lenis 那一行。
        往下读文章时滑动跟不跟手，差的就是这一块。往回滚一进来立刻恢复。 */
     if (frozen === null && m.scrolled >= m.span + FADE_SPAN * window.innerHeight) {
-      videoBackground?.setVisible(false);
       if (lastStageOpacity !== 0) { lastStageOpacity = 0; stage.style.opacity = '0'; }
       scheduleFrame();
       return;
@@ -901,7 +897,6 @@ function frame(now) {
       lastStageOpacity = fade;
       stage.style.opacity = String(fade);
     }
-    videoBackground?.setVisible(loaderLeaving && fade > 0.001);
 
     updateBlink(dt);
 
@@ -917,8 +912,7 @@ function frame(now) {
     bgColor.lerp(targetBg, k);
     bgTop.lerp(targetBgTop, k);
     bgBot.lerp(targetBgBot, k);
-    scene.background = videoBackground?.active ? null : bgColor;
-    if (sky) sky.visible = !videoBackground?.active;
+    scene.background = bgColor;
     if (skyMat) {
       skyMat.uniforms.uTop.value.copy(bgTop);
       skyMat.uniforms.uBot.value.copy(bgBot);
@@ -957,7 +951,6 @@ function frame(now) {
        0.8 秒，第一帧海在 16 毫秒内就补上，肉眼看不出空档。
        （早先那版限到 30fps 是同一个思路，只是让得太少，这回直接全让出去。） */
     if (!loaderLeaving) { scheduleFrame(); return; }
-    videoBackground?.setVisible(true);
     if (now - lastSky < 33) { scheduleFrame(); return; }
     lastSky = now;
     renderSkyOnly(now);
@@ -985,8 +978,7 @@ function renderSkyOnly(now) {
   skyMat.uniforms.uBot.value.copy(bgBot);
   skyMat.uniforms.uFlow.value = FLOW_AMOUNT * (darkNow ? DARK_FLOW : 1);
   skyMat.uniforms.uTime.value = now * 0.001;
-  scene.background = videoBackground?.active ? null : bgColor;
-  if (sky) sky.visible = !videoBackground?.active;
+  scene.background = bgColor;
   renderer.render(scene, camera);
   if (stage && stage.style.backgroundColor !== '#' + bgBot.getHexString()) {
     stage.style.backgroundColor = '#' + bgBot.getHexString();
@@ -1035,8 +1027,6 @@ function hideLoader() {
 }
 
 function fallbackPoster() {
-  videoBackground?.dispose();
-  videoBackground = null;
   renderingStopped = true;
   if (frameRequest) cancelAnimationFrame(frameRequest);
   frameRequest = 0;
@@ -1281,7 +1271,7 @@ function boot() {
   window.addEventListener('pagehide', (event) => {
     if (frameRequest) cancelAnimationFrame(frameRequest);
     frameRequest = 0;
-    if (!event.persisted) { renderingStopped = true; sizeObserver.disconnect(); if (lenis) lenis.destroy(); videoBackground?.dispose(); }
+    if (!event.persisted) { renderingStopped = true; sizeObserver.disconnect(); if (lenis) lenis.destroy(); }
   });
   window.addEventListener('pageshow', (event) => {
     if (event.persisted) { last = performance.now(); lastRendered = 0; resize(); scheduleFrame(); }
