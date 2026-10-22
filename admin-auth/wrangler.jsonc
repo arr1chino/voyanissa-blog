@@ -1,0 +1,18 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "voyanissa-blog-auth",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-22",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "routes": [{ "pattern": "blog-auth.shiq.me", "custom_domain": true }],
+  "vars": {
+    "ADMIN_ORIGIN": "https://arr1chino.github.io",
+    "AUTH_ORIGIN": "https://blog-auth.shiq.me",
+    "ALLOWED_USER": "arr1chino",
+    "SOURCE_REPO": "arr1chino/voyanissa-blog",
+    "PUBLISH_REPO": "arr1chino/arr1chino.github.io"
+  },
+  "kv_namespaces": [{ "binding": "CMS_CONFIG", "id": "61e19c1b0e5c4a57a15e65b030404ac4" }],
+  "observability": { "enabled": true, "head_sampling_rate": 1, "logs": { "enabled": true, "invocation_logs": false } }
+}

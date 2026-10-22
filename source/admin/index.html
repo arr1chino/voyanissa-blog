@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <title>博客写作后台</title>
+  <link rel="stylesheet" href="/admin/admin.css">
+</head>
+<body>
+  <header id="editor-help">
+    <a href="/">返回博客</a>
+    <span>保存草稿后，点击发布才会上线。</span>
+    <a href="https://github.com/arr1chino/voyanissa-blog/actions" target="_blank" rel="noopener noreferrer">查看发布进度</a>
+    <span id="auth-status" role="status"></span>
+  </header>
+  <p id="editor-loading" role="status">正在打开写作后台…</p>
+  <script>window.CMS_MANUAL_INIT=true;</script>
+  <script src="/admin/vendor/decap-cms-3.17.1/decap-cms.js"></script>
+  <script src="/admin/editor.js"></script>
+</body>
+</html>

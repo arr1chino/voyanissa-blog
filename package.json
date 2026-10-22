@@ -7,7 +7,8 @@
     "clean": "hexo clean",
     "deploy": "hexo deploy",
     "server": "hexo server",
-    "test:hero": "node --test tests/hero-runtime.mjs"
+    "test:hero": "node --test tests/hero-runtime.mjs",
+    "test:content": "node --test tests/content-runtime.cjs"
   },
   "hexo": {
     "version": "8.1.2"

@@ -1,0 +1,9 @@
+body { margin:0; font-family:system-ui,sans-serif; background:#f3f7fa; color:#203747; }
+#editor-help { display:flex; flex-wrap:wrap; align-items:center; gap:8px 22px; padding:10px 20px;
+  position:relative; z-index:1000; background:#fff; border-bottom:1px solid #d9e4ec; font-size:13px; }
+#editor-help a { color:#17688d; text-decoration:none; min-height:32px; display:inline-flex; align-items:center; }
+#editor-help[hidden] { display:none; }
+#editor-help a:focus-visible { outline:2px solid #17688d; outline-offset:3px; }
+#editor-help span { color:#526b7b; }
+#editor-loading { margin:12vh auto; padding:24px; max-width:440px; text-align:center; }
+@media(max-width:600px) { #editor-help { gap:4px 14px; padding:8px 12px; } }

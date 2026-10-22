@@ -29,6 +29,7 @@ category_dir: categories
 code_dir: downloads/code
 i18n_dir: :lang
 skip_render:
+  - admin/**
 
 # Writing
 new_post_name: :title.md # File name of new posts
@@ -112,6 +113,7 @@ theme: butterfly
 ## Docs: https://hexo.io/docs/one-command-deployment
 deploy:
   type: git
+  ignore_hidden: false
   repo: git@github.com:arr1chino/arr1chino.github.io.git
   branch: main
 

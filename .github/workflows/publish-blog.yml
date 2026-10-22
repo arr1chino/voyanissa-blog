@@ -1,0 +1,61 @@
+name: Publish blog
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: publish-blog
+  cancel-in-progress: true
+jobs:
+  publish:
+    if: github.repository == 'arr1chino/voyanissa-blog'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Check deployment setup
+        env:
+          DEPLOY_KEY: ${{ secrets.BLOG_DEPLOY_KEY }}
+        run: |
+          if [ -z "$DEPLOY_KEY" ]; then
+            echo 'Open the blog admin and finish GitHub login to enable publishing.'
+            exit 1
+          fi
+      - run: npm ci
+      - run: npm run test:hero
+      - run: npm run test:content
+      - run: npm run build
+      - name: Configure repository deployment key
+        env:
+          DEPLOY_KEY: ${{ secrets.BLOG_DEPLOY_KEY }}
+        run: |
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$DEPLOY_KEY" > "$HOME/.ssh/blog_deploy"
+          chmod 600 "$HOME/.ssh/blog_deploy"
+          curl --fail --silent --show-error https://api.github.com/meta | node -e 'let s="";process.stdin.on("data",c=>s+=c);process.stdin.on("end",()=>{for(const key of JSON.parse(s).ssh_keys)console.log("github.com "+key)})' > "$HOME/.ssh/known_hosts"
+          git config --global user.name 'Blog Publisher'
+          git config --global user.email 'blog-publisher@users.noreply.github.com'
+      - name: Publish generated site
+        env:
+          GIT_SSH_COMMAND: ssh -i /home/runner/.ssh/blog_deploy -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes
+        run: |
+          git clone --depth 1 --branch main git@github.com:arr1chino/arr1chino.github.io.git .publish-site
+          rsync -a --delete --exclude='.git/' public/ .publish-site/
+          git -C .publish-site add -A
+          if git -C .publish-site diff --cached --quiet; then
+            echo 'Published site is already current.'
+          else
+            git -C .publish-site commit -m "Publish blog from $GITHUB_SHA"
+            git -C .publish-site push origin HEAD:main
+          fi
+      - name: Remove temporary deployment key
+        if: always()
+        run: rm -f "$HOME/.ssh/blog_deploy"

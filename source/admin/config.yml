@@ -1,0 +1,56 @@
+backend:
+  name: github
+  repo: arr1chino/voyanissa-blog
+  branch: main
+  base_url: https://blog-auth.shiq.me
+  auth_endpoint: auth
+  squash_merges: true
+  commit_messages:
+    create: 'content: create {{collection}} "{{slug}}"'
+    update: 'content: update {{collection}} "{{slug}}"'
+    delete: 'content: delete {{collection}} "{{slug}}"'
+publish_mode: editorial_workflow
+locale: zh_Hans
+site_url: https://arr1chino.github.io
+display_url: https://arr1chino.github.io
+media_folder: source/img/uploads
+public_folder: /img/uploads
+slug:
+  encoding: unicode
+  clean_accents: true
+  sanitize_replacement: '-'
+collections:
+  - name: posts
+    label: 文章
+    label_singular: 文章
+    folder: source/_posts
+    extension: md
+    format: frontmatter
+    create: true
+    delete: true
+    slug: '{{slug}}'
+    summary: '{{title}} · {{date}}'
+    sortable_fields: [date, title, updated]
+    view_groups:
+      - label: 分类
+        field: categories
+    fields:
+      - {label: 标题, name: title, widget: string}
+      - {label: 发布日期, name: date, widget: datetime, default: '{{now}}', format: 'YYYY-MM-DD HH:mm:ss', date_format: 'YYYY-MM-DD', time_format: 'HH:mm', picker_utc: false}
+      - {label: 更新时间, name: updated, widget: datetime, format: 'YYYY-MM-DD HH:mm:ss', date_format: 'YYYY-MM-DD', time_format: 'HH:mm', picker_utc: false, required: false}
+      - {label: 简介, name: description, widget: text, required: false, hint: '用一两句话介绍这篇文章。'}
+      - {label: 封面, name: cover, widget: image, required: false, choose_url: true}
+      - {label: 文章页顶图, name: top_img, widget: image, required: false, default: /img/post-top.webp}
+      - label: 分类
+        name: categories
+        widget: list
+        default: [作品]
+        required: false
+        field: {label: 分类, name: category, widget: string}
+      - label: 标签
+        name: tags
+        widget: list
+        required: false
+        field: {label: 标签, name: tag, widget: string}
+      - {label: B站视频链接, name: bilibili, widget: string, required: false, hint: '粘贴完整分享链接或 BV 号，发布时会自动插入播放器。'}
+      - {label: 正文, name: body, widget: markdown, required: false, modes: [rich_text, raw]}

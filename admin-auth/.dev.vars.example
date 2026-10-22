@@ -1,0 +1,4 @@
+CONFIG_ENCRYPTION_KEY="development-only"
+BOOTSTRAP_HASH="development-only"
+BLOG_DEPLOY_PRIVATE_KEY="development-only"
+BLOG_DEPLOY_PUBLIC_KEY="development-only"
