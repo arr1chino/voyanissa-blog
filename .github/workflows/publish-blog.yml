@@ -31,7 +31,15 @@ jobs:
           fi
       - run: npm ci
       - run: npm run test:hero
-      - run: npm run test:content
+      - name: Test content and profile rendering
+        run: |
+          if npm run test:content > "$RUNNER_TEMP/content-tests.log" 2>&1; then
+            cat "$RUNNER_TEMP/content-tests.log"
+          else
+            cat "$RUNNER_TEMP/content-tests.log"
+            node -e 'const fs=require("fs");const log=fs.readFileSync(process.env.RUNNER_TEMP+"/content-tests.log","utf8");console.log("::error::"+log.replace(/%/g,"%25").replace(/\r/g,"%0D").replace(/\n/g,"%0A"))'
+            exit 1
+          fi
       - run: npm run build
       - name: Configure repository deployment key
         env:
