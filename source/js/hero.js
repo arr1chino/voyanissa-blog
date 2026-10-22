@@ -1285,16 +1285,14 @@ boot();
    「About Me」那一屏的打字机。
    一个字一个字打出来 → 停一下 → 再一个字一个字删掉 → 接着打清单里的
    下一个词（按顺序来，最后一个打完之后回到第一个）。
-   想换词只改下面这份 ABOUT_WORDS 清单，格式是「一个词一行」。
+   兴趣词来自后台「网站设置 → 首页介绍」，由模板写入 data-words。
    ----------------------------------------------------------------- */
-const ABOUT_WORDS = [
-  '排球', '跳绳', '摄影', '二次元', '游戏',
-  '螺蛳粉', 'AIGC', '待开发',
-];
-
 (function aboutTyper() {
   const el = document.getElementById('hero-about-word');
   if (!el) return;
+  let ABOUT_WORDS;
+  try { ABOUT_WORDS = JSON.parse(el.dataset.words || '[]'); } catch { ABOUT_WORDS = []; }
+  if (!Array.isArray(ABOUT_WORDS) || !ABOUT_WORDS.length) return;
 
   /* 系统里开了「减少动态效果」的话，一直闪的字会让人难受，直接给一个静态词。 */
   if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {

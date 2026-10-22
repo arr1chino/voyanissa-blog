@@ -7,3 +7,14 @@ body { margin:0; font-family:system-ui,sans-serif; background:#f3f7fa; color:#20
 #editor-help span { color:#526b7b; }
 #editor-loading { margin:12vh auto; padding:24px; max-width:440px; text-align:center; }
 @media(max-width:600px) { #editor-help { gap:4px 14px; padding:8px 12px; } }
+/* Decap 3.17.1 fixes the editor at 800px by default. Keep its save/publish controls reachable on phones. */
+@media(max-width:800px) {
+  html [class*="-EditorContainer"] { min-width:0; }
+  html [class*="-ToolbarContainer"] { min-width:0; width:100%; padding:8px; flex-wrap:wrap; height:auto; }
+  html [class*="-BackCollection"], html [class*="-BackStatus"], html [class*="-ToolbarSectionMeta"] { display:none; }
+  html [class*="-ToolbarSectionMain"] { min-width:0; flex:1; margin:0; padding:0; flex-wrap:wrap; }
+  html [class*="-ToolbarSubSectionFirst"] { min-width:0; margin:0; padding:0; flex-wrap:wrap; gap:4px; }
+  html [class*="-ToolbarDropdown"], html [class*="-ToolbarButton"] { margin:2px; }
+  html [class*="-EditorContainer"] .Pane1 { width:100% !important; }
+  html [class*="-EditorContainer"] .Pane2, html [class*="-EditorContainer"] .Resizer { display:none; }
+}

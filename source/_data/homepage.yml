@@ -1,0 +1,43 @@
+intro:
+  lead: 组成我的 ——
+  title: 沃雅妮莎激推！！
+  kicker: About Me
+  welcome: WELCOME
+  words:
+    - 排球
+    - 跳绳
+    - 摄影
+    - 二次元
+    - 游戏
+    - 螺蛳粉
+    - AIGC
+    - 待开发
+model:
+  kicker: 01 / 你好
+  title: 关于这个形象
+  body: |-
+    模型来自原神角色沃雅妮莎，用 MMD 骨骼驱动，网页实时渲染。
+    这个界面用3D建模设计，滚动就能看到不同角度。
+current:
+  kicker: 02 / 我在做什么
+  title: 管院大一·狂暴学习中
+  body: 筹备摄影策划，准备机器人比赛，coding社团任务中。。
+  tags:
+    - 二次元摄影
+    - 排球
+    - 专业课
+    - 建模
+hobbies:
+  kicker: 03 / 转过身
+  title: 我的爱好超级多，待开发…
+  body: 来和我交朋友
+website:
+  kicker: 04 / 近一点
+  title: 关于这个网站
+  body: |-
+    coding by deepseek v4.1 flash
+    蓝色大肥鱼很好用哦
+blog:
+  kicker: 05 / 继续向下
+  title: 下面是博客
+  body: 文章、作品和联系方式都排在后面。

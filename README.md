@@ -53,6 +53,10 @@ npm run deploy   # 推送到 GitHub Pages
 
 「B站视频链接」可直接粘贴完整分享文本或 BV 号，生成时会插入响应式播放器和原视频链接，默认不自动播放。已有文章里的手写播放器也会继续保留，不需要迁移旧文章。
 
+「网站设置 → 个人资料」可编辑昵称、个人简介、头像、网站名称与简介、页脚介绍及联系方式；「网站设置 → 首页介绍」可编辑开场主副标题、循环兴趣词和五段滚动介绍。修改同样先保存、再发布，等待自动构建上线。联系方式有主页链接时跳转，没有链接时复制所填账号；删除某一项即可隐藏。后台右侧提供文字预览。
+
+这些内容分别保存在 `source/_data/profile.yml` 与 `source/_data/homepage.yml`。`scripts/profile.js` 在生成前仅同步作者、标题、简介和头像到全站配置，首页模板读取介绍文案和联系方式；文章作者、搜索摘要和页脚署名会一起更新。兴趣词由 HTML 属性交给现有打字机，不额外请求接口。模型、镜头和部署配置仍由原来的文件管理。不要在主题模板或 `_config.yml` 重复改个人资料。
+
 首次需要通过专用开通入口注册自己的 GitHub OAuth 应用，首页网址填写 `https://arr1chino.github.io/admin/`，回调填写 `https://blog-auth.shiq.me/callback`。Client ID 和 Client secret 只提交到自己的登录服务，配置使用 AES-GCM 加密保存在独立 KV 中，不进入源码。完成注册后，首次登录会配置发布仓库的专用部署公钥、源码仓库的 `BLOG_DEPLOY_KEY` Secret，以及 GitHub Pages 的工作流发布模式。开通入口随后关闭。
 
 自动发布有两步：源码仓库的 `.github/workflows/publish-blog.yml` 构建网站，正常提交到发布仓库；发布仓库的 `.github/workflows/pages.yml` 使用官方 Pages Actions 上线。发布流程不会强推覆盖历史。`scripts/pages-workflow.js` 确保以后本地部署也会保留发布工作流。可以在源码仓库的 Actions 页面查看进度。

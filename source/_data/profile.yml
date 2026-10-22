@@ -1,0 +1,32 @@
+author: 大碗螺蛳粉
+tagline: 于是我摊开手允许一切闹麻
+avatar: /img/avatar.webp
+site_title: 沃雅妮莎的个人空间
+site_description: 个人博客 · 作品集 · 关于我
+footer_brand: VOYANISSA
+footer_description: 一个把三维形象放进网页的作品集：滚动看分镜、鼠标带着镜头走，下面是文章与作品。做前端、做设计，也做点影像。
+contacts:
+  - platform: douyin
+    name: 抖音
+    handle: 大碗螺蛳粉
+    url: https://v.douyin.com/rJQdFXy6He8/
+  - platform: bilibili
+    name: 哔哩哔哩
+    handle: 十七7页序
+    url: https://space.bilibili.com/386249744
+  - platform: wechat
+    name: 微信
+    handle: a1wysmile
+    copy: a1wysmile
+  - platform: qq
+    name: QQ
+    handle: '3558069054'
+    url: https://wpa.qq.com/msgrd?v=3&uin=3558069054&site=qq&menu=yes
+  - platform: genshin
+    name: 原神
+    handle: '241258807'
+    copy: '241258807'
+  - platform: github
+    name: GitHub
+    handle: arr1chino
+    url: https://github.com/arr1chino

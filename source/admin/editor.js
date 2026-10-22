@@ -19,9 +19,43 @@
         props.widgetFor('body'),
         bvid ? h('p', null, h('a', {href:'https://www.bilibili.com/video/'+bvid[0]+'/',target:'_blank',rel:'noopener noreferrer'}, 'B站视频：'+bvid[0]+'（发布后显示播放器）')) : null);
     });
+    const previewStyle={fontFamily:'system-ui,sans-serif',padding:'28px',color:'#243d4d',lineHeight:1.85,overflowWrap:'anywhere',whiteSpace:'pre-line'};
+    CMS.registerPreviewTemplate('profile', function (props) {
+      const data=props.entry.get('data');
+      const avatar=data.get('avatar');
+      const contacts=data.get('contacts');
+      return h('article',{style:previewStyle},
+        h('p',null,'个人资料预览 · 保存并发布后更新网站'),
+        avatar?h('img',{src:String(props.getAsset(avatar)),alt:'头像',style:{width:'88px',height:'88px',objectFit:'cover',borderRadius:'50%'}}):null,
+        h('h1',null,data.get('author')),h('p',null,data.get('tagline')),
+        h('h2',null,data.get('site_title')),h('p',null,data.get('site_description')),
+        h('h2',null,data.get('footer_brand')),h('p',null,data.get('footer_description')),
+        h('ul',null,contacts?.map((item,index)=>h('li',{key:index},item.get('name')+' · '+(item.get('handle')||'')+(item.get('url')?' → '+item.get('url'):'（点击复制：'+(item.get('copy')||'未填写')+'）')))));
+    });
+    CMS.registerPreviewTemplate('homepage', function (props) {
+      const data=props.entry.get('data');
+      const intro=data.get('intro');
+      return h('article',{style:previewStyle},
+        h('p',null,'首页文字预览 · 保存并发布后更新网站'),
+        h('h1',null,intro?.get('title')),
+        h('p',null,intro?.get('kicker')+' / '+intro?.get('welcome')),
+        h('p',null,intro?.get('lead')+' '+(intro?.get('words')?.join(' / ')||'')),
+        ...['model','current','hobbies','website','blog'].map(key=>{
+          const scene=data.get(key);
+          return h('section',{key},h('small',null,scene?.get('kicker')),h('h2',null,scene?.get('title')),h('p',null,scene?.get('body')),h('p',null,scene?.get('tags')?.join(' · ')));
+        }));
+    });
   }
   CMS.registerEventListener({name:'preSave',handler:({entry})=>{
     const data=entry.get('data');
+    if(entry.get('collection')!=='posts'){
+      if(entry.get('collection')==='settings'&&data.has('author')){
+        data.get('contacts')?.forEach(contact=>{
+          if(!contact.get('url')&&!String(contact.get('copy')||'').trim())throw new Error((contact.get('name')||'联系方式')+'：请填写主页链接或点击复制的内容。');
+        });
+      }
+      return data;
+    }
     const video=data.get('bilibili');
     if(video&&!/BV1[0-9A-Za-z]{9}(?![0-9A-Za-z])/.test(String(video)))throw new Error('B站链接中没有找到有效的 BV 号，请检查链接。');
     const now=new Date();

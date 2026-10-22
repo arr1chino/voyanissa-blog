@@ -1,6 +1,7 @@
 extends includes/layout.pug
 
 block content
+  - const homepage = blogHomepage()
   script document.body.classList.add('hero-mode'); document.documentElement.classList.add('hero-mode')
   #hero
     //- 首屏加载遮罩。3D 模型要在浏览器里解析一段时间（网速 + 机器决定），
@@ -48,52 +49,27 @@ block content
           //- 0：开场那一屏，不放资料卡。
           //-    页面最顶上（沃雅妮莎头顶那块空白里）是「组成我的 —— 打字机」，
           //-    中间那组艺术字从上往下是「沃雅妮莎激推！！/ About Me / WELCOME」。
-          //-    想换那句循环播放的词，改 /js/hero.js 里的 ABOUT_WORDS 清单。
+          //-    文案和兴趣词通过后台「网站设置 → 首页介绍」编辑。
           .hero-panel.hero-panel--about(data-index='0')
             .hero-about-top
               .hero-about-line
-                span.hero-about-lead 组成我的 ——
-                span.hero-about-word#hero-about-word
+                span.hero-about-lead= homepage.intro.lead
+                span.hero-about-word#hero-about-word(data-words=JSON.stringify(homepage.intro.words))
             .hero-about
-              .hero-about-name 沃雅妮莎激推！！
-              .hero-about-kicker About Me
-              .hero-about-welcome WELCOME
-          .hero-panel(data-index='1')
-            .hero-panel-inner
-              .hero-kicker 01 / 你好
-              h2 关于这个形象
-              p
-                | 模型来自原神角色沃雅妮莎，用 MMD 骨骼驱动，网页实时渲染。
-                br
-                | 这个界面用3D建模设计，滚动就能看到不同角度。
-          .hero-panel(data-index='2')
-            .hero-panel-inner
-              .hero-kicker 02 / 我在做什么
-              h2 管院大一·狂暴学习中
-              p 筹备摄影策划，准备机器人比赛，coding社团任务中。。
-              .hero-tags
-                span 二次元摄影
-                span 排球
-                span 专业课
-                span 建模
-          .hero-panel(data-index='3')
-            .hero-panel-inner
-              .hero-kicker 03 / 转过身
-              h2 我的爱好超级多，待开发…
-              p 来和我交朋友
-          .hero-panel(data-index='4')
-            .hero-panel-inner
-              .hero-kicker 04 / 近一点
-              h2 关于这个网站
-              p
-                | coding by deepseek v4.1 flash
-                br
-                | 蓝色大肥鱼很好用哦
-          .hero-panel(data-index='5')
-            .hero-panel-inner
-              .hero-kicker 05 / 继续向下
-              h2 下面是博客
-              p 文章、作品和联系方式都排在后面。
+              .hero-about-name= homepage.intro.title
+              .hero-about-kicker= homepage.intro.kicker
+              .hero-about-welcome= homepage.intro.welcome
+          each section, index in ['model', 'current', 'hobbies', 'website', 'blog']
+            - const scene = homepage[section]
+            .hero-panel(data-index=index + 1)
+              .hero-panel-inner
+                .hero-kicker= scene.kicker
+                h2= scene.title
+                p= scene.body
+                if scene.tags && scene.tags.length
+                  .hero-tags
+                    each tag in scene.tags
+                      span= tag
         .hero-hint 向下滚动
         .hero-credit 模型提供 miHoYo · 改造 观海子 · 仅作学习展示
     //- ============================================================

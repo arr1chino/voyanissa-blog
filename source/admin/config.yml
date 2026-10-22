@@ -54,3 +54,84 @@ collections:
         field: {label: 标签, name: tag, widget: string}
       - {label: B站视频链接, name: bilibili, widget: string, required: false, hint: '粘贴完整分享链接或 BV 号，发布时会自动插入播放器。'}
       - {label: 正文, name: body, widget: markdown, required: false, modes: [rich_text, raw]}
+  - name: settings
+    label: 网站设置
+    description: 修改后先保存，再发布，等待网站自动更新。
+    delete: false
+    files:
+      - name: profile
+        label: 个人资料
+        file: source/_data/profile.yml
+        fields:
+          - {label: 昵称, name: author, widget: string, hint: '用于个人资料卡、文章作者和页脚署名。'}
+          - {label: 个人简介, name: tagline, widget: text, required: false, hint: '头像下的一句话，支持换行。'}
+          - {label: 头像, name: avatar, widget: image, choose_url: true, hint: '建议上传正方形图片，也可填图片网址。'}
+          - {label: 网站名称, name: site_title, widget: string}
+          - {label: 网站简介, name: site_description, widget: text, required: false, hint: '用于搜索结果和分享摘要。'}
+          - {label: 页脚名称, name: footer_brand, widget: string}
+          - {label: 页脚介绍, name: footer_description, widget: text, required: false}
+          - label: 联系方式
+            name: contacts
+            widget: list
+            required: false
+            summary: '{{fields.name}} · {{fields.handle}}'
+            hint: '显示在首页底部联系方式区域；删除某一项即可隐藏。'
+            fields:
+              - label: 平台图标
+                name: platform
+                widget: select
+                default: website
+                options:
+                  - {label: 抖音, value: douyin}
+                  - {label: 哔哩哔哩, value: bilibili}
+                  - {label: 微信, value: wechat}
+                  - {label: QQ, value: qq}
+                  - {label: 原神, value: genshin}
+                  - {label: GitHub, value: github}
+                  - {label: 其他网站, value: website}
+              - {label: 平台名称, name: name, widget: string}
+              - {label: 账号名称, name: handle, widget: string, required: false}
+              - {label: 主页链接, name: url, widget: string, required: false, pattern: ['^https?://[^\s]+$', '请填写以 https:// 或 http:// 开头的完整网址。'], hint: '访客点击后打开此链接。微信、原神等无主页的平台可留空。'}
+              - {label: 点击复制的内容, name: copy, widget: string, required: false, hint: '没有主页链接时必填，例如微信号或游戏 UID。'}
+      - name: homepage
+        label: 首页介绍
+        file: source/_data/homepage.yml
+        fields:
+          - label: 开场文字与兴趣词
+            name: intro
+            widget: object
+            fields:
+              - {label: 兴趣词前缀, name: lead, widget: string}
+              - {label: 开场主标题, name: title, widget: string, hint: '建议保持简短，避免遮住人物。'}
+              - {label: 开场副标题, name: kicker, widget: string}
+              - {label: 欢迎文字, name: welcome, widget: string}
+              - label: 循环兴趣词
+                name: words
+                widget: list
+                min: 1
+                hint: '按顺序循环显示，至少保留一个。'
+                field: {label: 兴趣词, name: word, widget: string}
+          - label: 第一段 · 关于形象
+            name: model
+            widget: object
+            collapsed: true
+            fields: &scene_fields
+              - {label: 小标题, name: kicker, widget: string}
+              - {label: 标题, name: title, widget: string}
+              - {label: 介绍正文, name: body, widget: text, required: false, hint: '支持换行，建议两三句话。'}
+          - label: 第二段 · 我在做什么
+            name: current
+            widget: object
+            collapsed: true
+            fields:
+              - {label: 小标题, name: kicker, widget: string}
+              - {label: 标题, name: title, widget: string}
+              - {label: 介绍正文, name: body, widget: text, required: false}
+              - label: 兴趣标签
+                name: tags
+                widget: list
+                required: false
+                field: {label: 标签, name: tag, widget: string}
+          - {label: 第三段 · 我的爱好, name: hobbies, widget: object, collapsed: true, fields: *scene_fields}
+          - {label: 第四段 · 关于网站, name: website, widget: object, collapsed: true, fields: *scene_fields}
+          - {label: 第五段 · 博客引导, name: blog, widget: object, collapsed: true, fields: *scene_fields}
