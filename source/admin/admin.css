@@ -9,7 +9,7 @@ body { margin:0; font-family:system-ui,sans-serif; background:#f3f7fa; color:#20
 @media(max-width:600px) { #editor-help { gap:4px 14px; padding:8px 12px; } }
 /* Decap 3.17.1 fixes the editor at 800px by default. Keep its save/publish controls reachable on phones. */
 @media(max-width:800px) {
-  html [class*="-EditorContainer"] { min-width:0; }
+  html [class*="-EditorContainer"] { min-width:0; padding-top:128px; }
   html [class*="-ToolbarContainer"] { min-width:0; width:100%; padding:8px; flex-wrap:wrap; height:auto; }
   html [class*="-BackCollection"], html [class*="-BackStatus"], html [class*="-ToolbarSectionMeta"] { display:none; }
   html [class*="-ToolbarSectionMain"] { min-width:0; flex:1; margin:0; padding:0; flex-wrap:wrap; }

@@ -38,9 +38,12 @@ test('profile settings reject unusable links and empty typewriter words',()=>{
 });
 
 test('editing settings reaches real homepage, article metadata and contacts without changing scene count',async()=>{
+  try {
   const Hexo=require('hexo');
   const {JSDOM}=require('node:module').createRequire(require.resolve('hexo-renderer-marked'))('jsdom');
   const hexo=new Hexo(project,{silent:true});
+  // Never depend on a developer's incremental build cache.
+  hexo.database.options.path=path.join(project,'node_modules/.profile-test-unused-db.json');
   await hexo.init();
   const changed=settings();
   Object.assign(changed.profile,{
@@ -85,4 +88,8 @@ test('editing settings reaches real homepage, article metadata and contacts with
   assert.ok(post('title').text().includes('资料测试网站'));
   assert.equal(post('meta[name="author"]').attr('content'),'资料测试作者');
   assert.ok(post('.post-copyright').text().includes('资料测试作者'));
+  } catch (error) {
+    if(process.env.GITHUB_ACTIONS)console.error('::error file=tests/content-runtime.cjs::'+String(error.stack||error).replace(/%/g,'%25').replace(/\r/g,'%0D').replace(/\n/g,'%0A'));
+    throw error;
+  }
 });
