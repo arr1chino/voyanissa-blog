@@ -1,5 +1,5 @@
 author: 大碗螺蛳粉
-tagline: 于是我摊开手允许一切闹麻
+tagline: 你是千夏控吗=OwO=
 avatar: /img/avatar.webp
 site_title: 沃雅妮莎的个人空间
 site_description: 个人博客 · 作品集 · 关于我
@@ -20,12 +20,12 @@ contacts:
     copy: a1wysmile
   - platform: qq
     name: QQ
-    handle: '3558069054'
+    handle: "3558069054"
     url: https://wpa.qq.com/msgrd?v=3&uin=3558069054&site=qq&menu=yes
   - platform: genshin
     name: 原神
-    handle: '241258807'
-    copy: '241258807'
+    handle: "241258807"
+    copy: "241258807"
   - platform: github
     name: GitHub
     handle: arr1chino
