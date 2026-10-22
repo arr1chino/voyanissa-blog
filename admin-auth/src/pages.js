@@ -13,10 +13,27 @@ export function setupHTML(env, nonce) {
   const github = new URL('https://github.com/settings/applications/new');
   github.search = new URLSearchParams({'oauth_application[name]':'沃雅妮莎博客写作后台','oauth_application[url]':env.ADMIN_ORIGIN+'/admin/','oauth_application[callback_url]':env.AUTH_ORIGIN+'/callback'}).toString();
   return documentHTML('开通博客写作后台', `<h1>开通博客写作后台</h1><p>只需完成这一次设置，之后就能用 GitHub 登录写文章。</p><ol><li><a href="${escapeHTML(github.href)}" target="_blank" rel="noopener noreferrer">打开 GitHub 注册页面</a>，名称和网址已填好，点击 <strong>Register application</strong>。</li><li>复制页面中的 <strong>Client ID</strong>，再点 <strong>Generate a new client secret</strong>，把两项填在下面。</li></ol><p><small>如果注册页有“Expire user access tokens”选项，先取消勾选。密钥只会加密保存到你的登录服务，不会写进博客或代码仓库。</small></p><form id="setup"><label>Client ID<input id="client-id" required autocomplete="off" spellcheck="false"></label><label>Client secret<input id="client-secret" type="password" required autocomplete="off"></label><button id="save">保存并继续</button></form><p id="message" role="status"></p><p><a href="${escapeHTML(env.ADMIN_ORIGIN)}/admin/">返回写作后台</a></p><script nonce="${nonce}">
-const token=location.hash.slice(1);history.replaceState(null,'',location.pathname);
+const storageKey='blog-cms-setup';
+let token='';
 const form=document.getElementById('setup'),message=document.getElementById('message'),button=document.getElementById('save');
-if(!token){message.textContent='请使用本次提供给你的专用开通链接。';button.disabled=true;}
-form.addEventListener('submit',async(event)=>{event.preventDefault();button.disabled=true;message.textContent='正在保存…';try{const response=await fetch('/configure',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({clientId:document.getElementById('client-id').value.trim(),clientSecret:document.getElementById('client-secret').value.trim()})});const result=await response.json();if(!response.ok)throw new Error(result.error||'保存失败，请重试');document.getElementById('client-secret').value='';message.textContent='设置已保存。返回写作后台，点击“使用 GitHub 登录”，首次登录会自动接通发布。';}catch(error){message.textContent=error.message;}finally{button.disabled=false;}});
+function restoreAuthorization(){
+  const incoming=location.hash.slice(1);
+  token=/^[a-f0-9]{64}$/.test(incoming)?incoming:'';
+  try{
+    if(token)sessionStorage.setItem(storageKey,JSON.stringify({token,expires:Date.now()+3600000}));
+    else{
+      const cached=JSON.parse(sessionStorage.getItem(storageKey)||'null');
+      if(cached&&/^[a-f0-9]{64}$/.test(cached.token)&&cached.expires>Date.now())token=cached.token;
+      else sessionStorage.removeItem(storageKey);
+    }
+  }catch{}
+  history.replaceState(null,'',location.pathname);
+  form.hidden=!token;button.disabled=!token;
+  message.textContent=token?'':'此页面缺少开通授权。请重新打开提供给你的专用开通入口，再填写 Client ID 和 Client secret。已注册的 GitHub 应用可以继续使用。';
+}
+restoreAuthorization();
+window.addEventListener('hashchange',restoreAuthorization);
+form.addEventListener('submit',async(event)=>{event.preventDefault();button.disabled=true;message.textContent='正在保存…';try{const response=await fetch('/configure',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({clientId:document.getElementById('client-id').value.trim(),clientSecret:document.getElementById('client-secret').value.trim()})});const result=await response.json();if(!response.ok)throw new Error(result.error||'保存失败，请重试');document.getElementById('client-secret').value='';try{sessionStorage.removeItem(storageKey);}catch{}form.hidden=true;message.textContent='设置已保存。返回写作后台，点击“使用 GitHub 登录”，首次登录会自动接通发布。';}catch(error){message.textContent=error.message;}finally{button.disabled=false;}});
 </script>`, nonce);
 }
 
