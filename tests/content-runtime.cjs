@@ -2,7 +2,7 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const {extractBvid,appendVideo}=require('../lib/bilibili.cjs');
-const {readSettings}=require('../lib/profile.cjs');
+const {readSettings,applyProfile}=require('../lib/profile.cjs');
 const fs=require('node:fs');
 const path=require('node:path');
 const yaml=require('js-yaml');
@@ -37,6 +37,16 @@ test('profile settings reject unusable links and empty typewriter words',()=>{
   assert.throws(()=>readSettings(data),/兴趣词/);
 });
 
+test('clearing a personal bio clears both profile cards without replacing the site summary',()=>{
+  const config={};
+  const theme={aside:{card_author:{description:'旧简介',button:{enable:true}}}};
+  applyProfile(config,theme,{...settings().profile,tagline:'',site_description:'搜索摘要'});
+  assert.equal(config.subtitle,'');
+  assert.equal(theme.aside.card_author.description,'');
+  assert.equal(config.description,'搜索摘要');
+  assert.equal(theme.aside.card_author.button.enable,true);
+});
+
 test('editing settings reaches real homepage, article metadata and contacts without changing scene count',async()=>{
   const Hexo=require('hexo');
   const {JSDOM}=require('node:module').createRequire(require.resolve('hexo-renderer-marked'))('jsdom');
@@ -46,7 +56,7 @@ test('editing settings reaches real homepage, article metadata and contacts with
   await hexo.init();
   const changed=settings();
   Object.assign(changed.profile,{
-    author:'资料测试作者',tagline:'第一行简介\n第二行简介',avatar:'/img/profile-test.webp',
+    author:'资料测试作者',tagline:'第一行简介\n第二行简介 <b>原样显示</b>',avatar:'/img/profile-test.webp',
     site_title:'资料测试网站',site_description:'资料测试摘要',footer_brand:'TEST BRAND',
     footer_description:'测试页脚介绍',contacts:[{platform:'wechat',name:'微信测试',copy:'profile-test-id'}]
   });
@@ -76,7 +86,7 @@ test('editing settings reaches real homepage, article metadata and contacts with
   };
   const home=await read('index.html');
   assert.equal(home('.hb-name').text(),'资料测试作者');
-  assert.equal(home('.hb-tagline').text(),'第一行简介\n第二行简介');
+  assert.equal(home('.hb-tagline').text(),changed.profile.tagline);
   assert.equal(home('.hb-avatar img').attr('src'),'/img/profile-test.webp');
   assert.ok(home('title').text().includes('资料测试网站'));
   assert.equal(home('meta[name="description"]').attr('content'),'资料测试摘要');
@@ -97,4 +107,8 @@ test('editing settings reaches real homepage, article metadata and contacts with
   assert.ok(post('title').text().includes('资料测试网站'));
   assert.equal(post('meta[name="author"]').attr('content'),'资料测试作者');
   assert.ok(post('.post-copyright').text().includes('资料测试作者'));
+  assert.equal(post('.author-info-name').text(),'资料测试作者');
+  assert.equal(post('.author-info-description').text(),changed.profile.tagline);
+  assert.equal(post('.author-info-description b').length,0);
+  assert.equal(post('.avatar-img img').attr('src'),'/img/profile-test.webp');
 });

@@ -64,7 +64,7 @@ collections:
         file: source/_data/profile.yml
         fields:
           - {label: 昵称, name: author, widget: string, hint: '用于个人资料卡、文章作者和页脚署名。'}
-          - {label: 个人简介, name: tagline, widget: text, required: false, hint: '头像下的一句话，支持换行。'}
+          - {label: 个人简介, name: tagline, widget: text, required: false, hint: '同步首页资料卡和文章侧栏，支持换行。'}
           - {label: 头像, name: avatar, widget: image, choose_url: true, hint: '建议上传正方形图片，也可填图片网址。'}
           - {label: 网站名称, name: site_title, widget: string}
           - {label: 网站简介, name: site_description, widget: text, required: false, hint: '用于搜索结果和分享摘要。'}
