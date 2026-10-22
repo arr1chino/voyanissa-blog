@@ -83,7 +83,9 @@ test('editing settings reaches real homepage, article metadata and contacts with
   assert.equal(home('.kelo-desc').text(),'测试页脚介绍');
   assert.equal(home('.kelo-social-item').length,1);
   assert.equal(home('.kelo-social-item').attr('data-hb-copy'),'profile-test-id');
-  const post=await read('2026/10/22/the-sound-of-farewell/index.html');
+  const article=hexo.model('Post').findOne({slug:'the-sound-of-farewell'});
+  assert.ok(article,'The existing video article must be loaded');
+  const post=await read(article.path);
   assert.ok(post('title').text().includes('资料测试网站'));
   assert.equal(post('meta[name="author"]').attr('content'),'资料测试作者');
   assert.ok(post('.post-copyright').text().includes('资料测试作者'));

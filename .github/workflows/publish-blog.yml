@@ -13,6 +13,8 @@ jobs:
     if: github.repository == 'arr1chino/voyanissa-blog'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      TZ: Asia/Shanghai
     steps:
       - uses: actions/checkout@v6
         with:
