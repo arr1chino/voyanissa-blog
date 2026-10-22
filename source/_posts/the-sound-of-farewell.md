@@ -1,7 +1,7 @@
 ---
 title: 离别的声音：一部关于多普勒效应的 AIGC 微课
 date: 2026-10-22 00:00:00
-updated: 2026-10-22 00:00:00
+updated: 2026-10-22 20:50:32
 description: 用警笛声、火车实验和声波动画，讲述多普勒效应，从音调变化一路讲到宇宙红移。
 cover: /img/post-doppler-cover.webp
 top_img: /img/post-top.webp
@@ -24,6 +24,8 @@ tags:
 
 [在哔哩哔哩观看完整版（约 6 分钟）](https://www.bilibili.com/video/BV1ejnq6UE7p/)
 
-## 从一句话开始
+## 原神牛逼
 
-这次先用 Opus 5.5 搭建大体框架，再由 GPT 6.1 Sol 补全，做成了这部物理微课。把成片放在这里，留个记录。
+这次用 Claude Opus 5.5 搭建大体框架，再由 GPT 6.1 Sol 补全，总体耗费大约30元和2个5小时plus额度。总体质量感觉还是不错的。主要是这种代码视频可控性高，后续修改简单。
+
+不推荐用Astra生框架，审美一坨。审美这方面Claude是独一档的，期待fable5.5
