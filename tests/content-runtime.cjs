@@ -56,7 +56,15 @@ test('editing settings reaches real homepage, article metadata and contacts with
   changed.homepage.current.body='介绍第一行\n介绍第二行';
   changed.homepage.current.tags=['测试标签'];
   // Override only this process's cached template data. No source or database edits.
-  hexo.extend.filter.register('before_generate',()=>Object.assign(hexo.locals.get('data'),changed),0);
+  hexo.extend.filter.register('before_generate',async()=>{
+    Object.assign(hexo.locals.get('data'),changed);
+    // A process-only post keeps this test independent of articles the owner may delete.
+    await hexo.model('Post').insert({
+      title:'个人资料回归测试',slug:'profile-regression-test',source:'_posts/profile-regression-test.md',
+      date:new Date('2020-01-01T00:00:00Z'),updated:new Date('2020-01-01T00:00:00Z'),
+      layout:'post',published:true,content:'测试正文',raw:'测试正文'
+    });
+  },0);
   await hexo.load();
   const read=async name=>{
     let out='';for await(const chunk of hexo.route.get(name))out+=chunk;
@@ -83,8 +91,8 @@ test('editing settings reaches real homepage, article metadata and contacts with
   assert.equal(home('.kelo-desc').text(),'测试页脚介绍');
   assert.equal(home('.kelo-social-item').length,1);
   assert.equal(home('.kelo-social-item').attr('data-hb-copy'),'profile-test-id');
-  const article=hexo.model('Post').findOne({slug:'the-sound-of-farewell'});
-  assert.ok(article,'The existing video article must be loaded');
+  const article=hexo.model('Post').findOne({slug:'profile-regression-test'});
+  assert.ok(article,'The process-only test article must be loaded');
   const post=await read(article.path);
   assert.ok(post('title').text().includes('资料测试网站'));
   assert.equal(post('meta[name="author"]').attr('content'),'资料测试作者');
