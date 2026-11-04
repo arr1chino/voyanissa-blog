@@ -3,6 +3,7 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const {extractBvid,appendVideo}=require('../lib/bilibili.cjs');
 const {readSettings,applyProfile}=require('../lib/profile.cjs');
+const {buildSchedule}=require('../lib/schedule.cjs');
 const fs=require('node:fs');
 const path=require('node:path');
 const yaml=require('js-yaml');
@@ -55,6 +56,7 @@ test('editing settings reaches real homepage, article metadata and contacts with
   hexo.database.options.path=path.join(project,'node_modules/.profile-test-unused-db.json');
   await hexo.init();
   const changed=settings();
+  changed.schedule={events:[{date:'2030-05-21',time:'14:00',title:'公开活动',note:'集合地点'}]};
   Object.assign(changed.profile,{
     author:'资料测试作者',tagline:'第一行简介\n第二行简介 <b>原样显示</b>',avatar:'/img/profile-test.webp',
     site_title:'资料测试网站',site_description:'资料测试摘要',footer_brand:'TEST BRAND',
@@ -68,6 +70,7 @@ test('editing settings reaches real homepage, article metadata and contacts with
   // Override only this process's cached template data. No source or database edits.
   hexo.extend.filter.register('before_generate',async()=>{
     Object.assign(hexo.locals.get('data'),changed);
+    await hexo.model('Data').save({_id:'schedule',data:changed.schedule});
     // A process-only post keeps this test independent of articles the owner may delete.
     await hexo.model('Post').insert({
       title:'个人资料回归测试',slug:'profile-regression-test',source:'_posts/profile-regression-test.md',
@@ -76,6 +79,11 @@ test('editing settings reaches real homepage, article metadata and contacts with
     });
   },0);
   await hexo.load();
+  let publishedSchedule='';
+  for await(const chunk of hexo.route.get('js/hb-calendar-data.js')) publishedSchedule+=chunk;
+  const scheduleWindow={};
+  require('node:vm').runInNewContext(publishedSchedule,{window:scheduleWindow});
+  assert.equal(scheduleWindow.HB_PUBLIC_SCHEDULE['2030-05-21'][0].title,'公开活动');
   const read=async name=>{
     let out='';for await(const chunk of hexo.route.get(name))out+=chunk;
     const doc=new JSDOM(out).window.document;
@@ -85,6 +93,9 @@ test('editing settings reaches real homepage, article metadata and contacts with
     };
   };
   const home=await read('index.html');
+  const calendar=await read('calendar/index.html');
+  assert.equal(calendar('script[src^="/js/hb-calendar-data.js"]').length,1);
+  assert.equal(calendar('script[src^="/js/hb-calendar.js"]').length,1);
   assert.equal(home('.hb-name').text(),'资料测试作者');
   assert.equal(home('.hb-tagline').text(),changed.profile.tagline);
   assert.equal(home('.hb-avatar img').attr('src'),'/img/profile-test.webp');
@@ -111,4 +122,44 @@ test('editing settings reaches real homepage, article metadata and contacts with
   assert.equal(post('.author-info-description').text(),changed.profile.tagline);
   assert.equal(post('.author-info-description b').length,0);
   assert.equal(post('.avatar-img img').attr('src'),'/img/profile-test.webp');
+});
+
+test('public schedule validates dates and times and preserves same-day events',()=>{
+  const schedule=buildSchedule({events:[
+    {date:new Date('2030-05-21T00:00:00Z'),time:'14:00',title:'下午',note:'第二行\n说明'},
+    {date:'2030-05-21',time:'09:00',title:'上午'},
+    {date:'2030-05-21',title:'全天'}
+  ]});
+  assert.deepEqual(schedule['2030-05-21'].map(event=>event.time),['','09:00','14:00']);
+  assert.throws(()=>buildSchedule({events:[{date:'2030-02-30',title:'错误日期'}]}),/日期不存在/);
+  assert.throws(()=>buildSchedule({events:[{date:'2030-05-21',time:'24:00',title:'错误时间'}]}),/时间/);
+  assert.deepEqual(buildSchedule({events:[]}),{});
+});
+
+test('public calendar and homepage ignore visitor notes and expose no editing controls',async()=>{
+  const {JSDOM}=require('node:module').createRequire(require.resolve('hexo-renderer-marked'))('jsdom');
+  const now=new Date();
+  const date=[now.getFullYear(),String(now.getMonth()+1).padStart(2,'0'),String(now.getDate()).padStart(2,'0')].join('-');
+  const shared=buildSchedule({events:[{date,time:'09:00',title:'博主的公开活动',note:'第一行\n第二行'},{date,time:'14:00',title:'另一个活动 <b>原文</b>'}]});
+  for(const privateTitle of ['甲访客的私人记录','乙访客的私人记录']){
+    const dom=new JSDOM('<div id="hb-calendar"></div><div id="hb-mini-cal-grid"></div><div id="hb-mini-cal-foot"></div>',{url:'https://example.test/calendar/',runScripts:'outside-only'});
+    const {window}=dom;
+    await new Promise(resolve=>window.addEventListener('DOMContentLoaded',resolve,{once:true}));
+    const oldData=JSON.stringify({[date]:[{time:'08:00',title:privateTitle,note:'本机内容'}]});
+    window.localStorage.setItem('hb-calendar-v1',oldData);
+    window.HB_PUBLIC_SCHEDULE=shared;
+    window.eval(fs.readFileSync(path.join(project,'source/js/hb-calendar.js'),'utf8'));
+    window.eval(fs.readFileSync(path.join(project,'source/js/hb-minical.js'),'utf8'));
+    const doc=window.document;
+    assert.equal(doc.querySelectorAll('.hb-cal-item').length,2);
+    assert.equal(doc.querySelectorAll('.hb-cal-note').length,2);
+    assert.ok(doc.querySelector('.hb-cal-notes').textContent.includes('博主的公开活动'));
+    assert.ok(!doc.body.textContent.includes(privateTitle));
+    assert.equal(doc.querySelectorAll('#hb-calendar input,#hb-calendar textarea,.hb-cal-save,.hb-cal-del').length,0);
+    assert.ok(doc.querySelector('#hb-mini-cal-foot').textContent.includes('2 条日程'));
+    assert.equal(window.localStorage.getItem('hb-calendar-v1'),oldData);
+    assert.ok(doc.querySelector('.hb-cal-legacy button'));
+    assert.ok(doc.querySelector('a[href="/admin/#/collections/settings/entries/schedule"]'));
+    dom.window.close();
+  }
 });

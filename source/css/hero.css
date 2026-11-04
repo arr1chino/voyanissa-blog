@@ -1189,7 +1189,9 @@ html.hb-dark .hb-fab:hover { background: #2b7fb8; color: #fff; }
 .hb-cal-note-time { font-size: 11px; font-weight: 700; color: #2b7fb8;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 .hb-cal-note-title { font-size: 14px; color: #24313d; }
-.hb-cal-note-body { margin: 5px 0 0; font-size: 12.5px; line-height: 1.7; color: #6b7885; }
+.hb-cal-note-body { margin: 5px 0 0; font-size: 12.5px; line-height: 1.7; color: #6b7885; white-space: pre-line; overflow-wrap: anywhere; }
+.hb-cal-legacy { margin-top: 20px; font-size: 12px; }
+.hb-cal-legacy summary { cursor: pointer; }
 .hb-cal-del { position: absolute; top: 8px; right: 8px; width: 26px; height: 26px; padding: 0;
   border-radius: 50%; cursor: pointer; border: 1px solid transparent; background: transparent;
   color: #9aa7b4; font-size: 12px; display: flex; align-items: center; justify-content: center;

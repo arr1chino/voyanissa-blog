@@ -108,14 +108,13 @@ block content
             .hb-card.hb-links-card
               h3.hb-card-title 友情链接
               ul.hb-links-list#hb-links-list
-            //- 本月日程：一张小小的缩略月历（今天 / 节日 / 自己批注过的日子
-            //- 都有标记），整张卡点一下就去 /calendar/ 那一页写日程。
+            //- 本月公开日程由后台发布，首页与日历页共用同一份数据。
             //- 画格子的人是 /js/hb-minical.js，节日数据在 /js/hb-holidays.js。
             a.hb-card.hb-mini-cal-card#hb-mini-cal(href=url_for('/calendar/'),
-              aria-label='打开日程日历，可以自己批注')
+              aria-label='查看博主公开日程')
               h3.hb-card-title
                 | 本月日程
-                span.hb-beta 测试中
+                span.hb-beta 公开
               .hb-mini-cal-month
                 b#hb-mini-cal-month ——
                 span.hb-mc-more 查看全部
@@ -237,6 +236,7 @@ block content
         '/js/hb-widgets.js',    // 友情链接 + 今日一言 + 每日三首
         '/js/hb-weather.js',    // 定位天气
         '/js/hb-holidays.js',   // 节日数据（小日历要用）
+        '/js/hb-calendar-data.js', // 博主发布的公开日程
         '/js/hb-minical.js',    // 本月日程小日历
       ]
       let fired = false

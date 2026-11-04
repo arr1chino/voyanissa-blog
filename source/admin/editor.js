@@ -20,6 +20,18 @@
         bvid ? h('p', null, h('a', {href:'https://www.bilibili.com/video/'+bvid[0]+'/',target:'_blank',rel:'noopener noreferrer'}, 'B站视频：'+bvid[0]+'（发布后显示播放器）')) : null);
     });
     const previewStyle={fontFamily:'system-ui,sans-serif',padding:'28px',color:'#243d4d',lineHeight:1.85,overflowWrap:'anywhere',whiteSpace:'pre-line'};
+    CMS.registerPreviewTemplate('schedule', function (props) {
+      const events = props.entry.getIn(['data', 'events']);
+      return h('article', {style: previewStyle},
+        h('h1', null, '公开日程'),
+        h('p', null, '北京时间 · 发布后所有访客均可查看'),
+        events?.size ? events.map((event, index) => h('section', {key: index},
+          h('small', null, String(event.get('date') || '') + ' ' + (event.get('time') || '全天')),
+          h('h2', null, event.get('title')),
+          h('p', null, event.get('note'))
+        )) : h('p', null, '暂无公开日程')
+      );
+    });
     CMS.registerPreviewTemplate('profile', function (props) {
       const data=props.entry.get('data');
       const avatar=data.get('avatar');

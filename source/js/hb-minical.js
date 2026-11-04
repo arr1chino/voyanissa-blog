@@ -1,15 +1,7 @@
-/* ===== 侧栏「本月日程」小日历 =====
-   首页左右两栏里那张小卡片：把本月的日期铺成一个小格子。
-   有节日的那天会标红并带名字（鼠标停上去能看见），今天是实心圆点，
-   自己批注过日程的日子会多一个小蓝点。
-   整张卡点一下 → 去 /calendar/ 那一页写日程（那边才能批注、导入导出）。
-
-   节日从 /js/hb-holidays.js 取，所以那个文件必须排在它前面；
-   自己写的批注存在浏览器里，和日历页共用同一份存储（hb-calendar-v1）。 */
+/* 首页公开日程小日历，与日历页共用后台发布的数据。 */
 (function () {
   'use strict';
 
-  var STORE_KEY = 'hb-calendar-v1';
   var WEEK = ['一', '二', '三', '四', '五', '六', '日'];
 
   function pad(n) { return (n < 10 ? '0' : '') + n; }
@@ -21,17 +13,6 @@
     var api = window.HB_HOLIDAYS;
     if (!api || typeof api.ymd !== 'function') return [];
     try { return api.ymd(y, m, d) || []; } catch (e) { return []; }
-  }
-
-  /* 自己批注过的日程（和日历页同一个存档） */
-  function notesOf() {
-    try {
-      var raw = localStorage.getItem(STORE_KEY);
-      if (!raw) return {};
-      var data = JSON.parse(raw);
-      if (data && typeof data === 'object') return data;
-    } catch (e) { /* 读不到就当没有 */ }
-    return {};
   }
 
   function make(tag, cls, text) {
@@ -61,7 +42,7 @@
     /* 表头从周一开始，getDay() 里周日是 0，所以 (day + 6) % 7 */
     var lead = (new Date(year, month, 1).getDay() + 6) % 7;
     var dayCount = new Date(year, month + 1, 0).getDate();
-    var notes = notesOf();
+    var notes = window.HB_PUBLIC_SCHEDULE || {};
     var fests = [];
 
     if (monthEl) monthEl.textContent = year + ' 年 ' + (month + 1) + ' 月';
@@ -121,16 +102,16 @@
       }
     }
 
-    /* 底下那行小字：这个月自己写了几条 */
+    /* 统计本月公开条目，同一天的多条安排分别计数。 */
     if (footEl) {
       var mine = 0;
       for (var k in notes) {
         if (!Object.prototype.hasOwnProperty.call(notes, k)) continue;
-        if (k.indexOf(year + '-' + pad(month + 1) + '-') === 0 && notes[k] && notes[k].length) mine++;
+        if (k.indexOf(year + '-' + pad(month + 1) + '-') === 0 && notes[k] && notes[k].length) mine += notes[k].length;
       }
       footEl.textContent = mine
-        ? '本月你写了 ' + mine + ' 条日程 · 点开看全部'
-        : '点开可以给自己批注日程';
+        ? '本月公开 ' + mine + ' 条日程 · 点开看全部'
+        : (window.HB_PUBLIC_SCHEDULE ? '本月暂无公开日程 · 查看日历' : '日程暂时未能加载 · 点开重试');
     }
   });
 })();
